@@ -83,18 +83,24 @@
     },
     "Checklist": {
       "title": "Checklist",
-      "description": "Pre-scrutineering compliance matrix",
+      "description": "Candidate checklist status",
       "type": "object",
       "properties": {
-        "teamName": { "type": "string" },
-        "carNumber": { "type": "string" },
-        "className": { "type": "string" },
-        "items": { "type": "string" },
+        "topics": { "type": "object" },
+        "isChecked": { "type": "boolean" },
         "userId": { "type": "string" },
-        "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       },
-      "required": ["teamName", "carNumber", "className", "items", "userId", "createdAt", "updatedAt"]
+      "required": ["userId", "updatedAt"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Application settings",
+      "type": "object",
+      "properties": {
+        "topics": { "type": "array" }
+      },
+      "required": ["topics"]
     },
     "Inspection": {
       "title": "Inspection",
@@ -172,6 +178,10 @@
     "/requests/{requestId}": {
       "schema": { "$ref": "#/entities/Request" },
       "description": "Collection of competitor requests"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Collection of application settings"
     }
   }
 }

@@ -68,9 +68,13 @@ service cloud.firestore {
     }
 
     function isValidChecklist(data) {
-      return hasRequiredFields(['teamName', 'carNumber', 'className', 'items', 'userId', 'createdAt', 'updatedAt']) &&
-             data.teamName is string && data.carNumber is string && data.className is string &&
-             data.items is string && data.userId is string && data.createdAt is string && data.updatedAt is string;
+      return hasRequiredFields(['userId', 'updatedAt']) &&
+             data.userId is string && data.updatedAt is string;
+    }
+
+    function isValidSettings(data) {
+      return hasRequiredFields(['topics']) &&
+             data.topics is list;
     }
 
     function isValidInspection(data) {
@@ -118,9 +122,16 @@ service cloud.firestore {
 
     match /checklists/{checklistId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidChecklist(request.resource.data) && uidUnchanged();
-      allow update: if isAuthenticated() && isValidChecklist(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if isAuthenticated() && isValidChecklist(request.resource.data) && isAdmin();
+      allow update: if isAuthenticated() && isValidChecklist(request.resource.data) && isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidSettings(request.resource.data) && isAdmin();
+      allow update: if isAuthenticated() && isValidSettings(request.resource.data) && isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /inspections/{inspectionId} {
