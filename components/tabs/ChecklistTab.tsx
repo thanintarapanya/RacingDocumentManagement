@@ -262,6 +262,9 @@ export default function ChecklistTab() {
       // @ts-ignore
       const html2pdf = (await import('html2pdf.js')).default;
       const element = document.getElementById('checklist-table-container');
+      if (!element) {
+        throw new Error('Checklist container not found');
+      }
       
       const opt: any = {
         margin:       0.4,
