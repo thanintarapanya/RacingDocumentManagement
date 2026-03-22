@@ -263,7 +263,7 @@ export default function ChecklistTab() {
       const html2pdf = (await import('html2pdf.js')).default;
       const element = document.getElementById('checklist-table-container');
       
-      const opt = {
+      const opt: any = {
         margin:       0.4,
         filename:     `candidate-checklist-${new Date().toISOString().split('T')[0]}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
