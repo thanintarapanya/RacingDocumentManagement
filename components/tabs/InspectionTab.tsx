@@ -1,84 +1,349 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Camera, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, UserPlus, Loader2 } from 'lucide-react';
+import { 
+  Search, 
+  ChevronUp, 
+  ChevronDown, 
+  FileText, 
+  X, 
+  Loader2,
+  ArrowLeft,
+  CheckCircle2,
+  Check
+} from 'lucide-react';
 import { db, auth } from '@/firebase';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 
-const SECTIONS = [
-  { id: 'surface', title: 'Track Surface Condition', items: ['Turn 1-3 Asphalt', 'Main Straight Grip', 'Pit Lane Entry'] },
-  { id: 'barriers', title: 'Safety Barriers & Fencing', items: ['Tire Walls Sector 1', 'Catch Fencing Main', 'Tecpro Barriers'] },
-  { id: 'timing', title: 'Timing & Systems', items: ['Start/Finish Loops', 'Sector 1 Split', 'Pit Speed Cameras'] },
-];
+type Inspection = {
+  id: string;
+  inspectionDate: string;
+  racingModel: string;
+  carNumber: string;
+  teamName: string;
+  racerName: string;
+  brand: string;
+  carModel: string;
+  sealNumber: string;
+  formData?: any;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const SortableHeader = ({ 
+  label, 
+  sortKey, 
+  align = 'left',
+  sortConfig,
+  requestSort
+}: { 
+  label: string, 
+  sortKey: keyof Inspection, 
+  align?: 'left' | 'right',
+  sortConfig: { key: keyof Inspection, direction: 'asc' | 'desc' } | null,
+  requestSort: (key: keyof Inspection) => void
+}) => {
+  const isActive = sortConfig?.key === sortKey;
+  return (
+    <th 
+      className={`px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 cursor-pointer hover:text-slate-700 hover:bg-slate-50/50 transition-colors select-none ${align === 'right' ? 'text-right' : 'text-left'}`}
+      onClick={() => requestSort(sortKey)}
+    >
+      <div className={`flex items-center gap-2 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+        {label}
+        <span className="flex flex-col">
+          <ChevronUp className={`w-2 h-2 ${isActive && sortConfig.direction === 'asc' ? 'text-orange-500' : 'text-slate-300'}`} />
+          <ChevronDown className={`w-2 h-2 -mt-0.5 ${isActive && sortConfig.direction === 'desc' ? 'text-orange-500' : 'text-slate-300'}`} />
+        </span>
+      </div>
+    </th>
+  );
+};
+
+const initialFormData = {
+  // Step 1: Series / Driver Info
+  inspectionDate: new Date().toISOString().split('T')[0],
+  stadium: '',
+  series: '',
+  grades: '',
+  carNumber: '',
+  teamName: '',
+  racerName: '',
+  teamManagerName: '',
+
+  // Step 2: Car Info
+  carManufacturer: '',
+  model: '',
+  engineDisplacement: '',
+  engineCode: '',
+  transmission: '',
+  drivetrain: '',
+  gearShiftPattern: '',
+  autoGearMoreThan6: false,
+  paddleShift: false,
+  engineCapacityWeight: {} as Record<string, { checked: boolean, weight: string, committeeWeight: string }>,
+  carBrandCapacityRestrictor: {} as Record<string, { checked: boolean, weight: string }>,
+  tireMarkAmount: { yokohama: '', hankook: '', giti: '' },
+
+  // Step 3: Inspection
+  carLight: { headLight: false, turnSignal: false, tailLight: false, breakLight: false },
+  carEquipment: {
+    towPoint: { installed: false, sticker: false },
+    bonnetLock: { installed: false, sticker: false },
+    extinguisher: { installed: false, sticker: false },
+    outsideKillSwitch: { installed: false, sticker: false },
+    insideKillSwitch: { installed: false, sticker: false },
+    seat: { installed: false, sticker: false },
+    harnesses: { installed: false, sticker: false },
+    rollOverBar: { installed: false, sticker: false },
+  },
+  racerSafety: {
+    helmet: false,
+    hans: false,
+    balaclava: false,
+    glove: false,
+    raceSuite: false,
+    sponsorTag: false,
+    shoes: false,
+  },
+  remark: '',
+  engineSealNumber: '',
+  gearSealNumber: '',
+  tireMarkAmountStep3: '',
+  ptrsSmokeDetector: false,
+  weightAddedAfterRace2: false,
+  balanceOfPerformance: '',
+
+  // Step 4: Change Engine Seal
+  changeSeal: 'Not Change Seal',
+  currentEngineSealNumber: '',
+  newEngineSealNumber: '',
+  reasonForChangingSeal: ''
+};
 
 export default function InspectionTab() {
-  const [expanded, setExpanded] = useState<string | null>('surface');
-  const [status, setStatus] = useState<Record<string, 'pass' | 'fail' | null>>({});
-  const [issues, setIssues] = useState<Record<string, string>>({});
+  const [view, setView] = useState<'list' | 'form'>('list');
+  const [inspections, setInspections] = useState<Inspection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Form Wizard States
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = 4;
+  
+  // List View States
+  const [search, setSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Inspection, direction: 'asc' | 'desc' } | null>(null);
+  const [recordsPerPage, setRecordsPerPage] = useState(20);
+  
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const renderToast = () => (
+    <AnimatePresence>
+      {toastMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+          className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3"
+        >
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <p className="text-sm font-medium">{toastMessage}</p>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
-    
-    // We use a single document for the facility audit for simplicity in this prototype
-    const docRef = doc(db, 'inspections', 'facility-audit');
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        try {
-          setStatus(JSON.parse(data.statusData || '{}'));
-          setIssues(JSON.parse(data.issuesData || '{}'));
-        } catch (e) {
-          console.error('Failed to parse inspection data', e);
-        }
-      } else {
-        // Initialize if it doesn't exist
-        setDoc(docRef, {
-          statusData: '{}',
-          issuesData: '{}',
-          userId: user.uid,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }).catch(e => handleFirestoreError(e, OperationType.CREATE, 'inspections'));
-      }
+    const q = query(collection(db, 'car_inspections'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data: Inspection[] = [];
+      snapshot.forEach((doc) => {
+        data.push({ id: doc.id, ...doc.data() } as Inspection);
+      });
+      setInspections(data);
       setIsLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'inspections');
+      handleFirestoreError(error, OperationType.LIST, 'car_inspections');
       setIsLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const handleStatus = (itemId: string, val: 'pass' | 'fail') => {
-    setStatus(prev => ({ ...prev, [itemId]: val }));
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => {
+      const keys = field.split('.');
+      if (keys.length === 1) {
+        return { ...prev, [field]: value };
+      }
+      
+      const newState = { ...prev };
+      let current: any = newState;
+      for (let i = 0; i < keys.length - 1; i++) {
+        current[keys[i]] = { ...current[keys[i]] };
+        current = current[keys[i]];
+      }
+      current[keys[keys.length - 1]] = value;
+      return newState;
+    });
   };
 
-  const handleIssueChange = (itemId: string, val: string) => {
-    setIssues(prev => ({ ...prev, [itemId]: val }));
-  };
-
-  const saveAudit = async () => {
+  const handleSubmit = async () => {
     if (!auth.currentUser) return;
-    setIsSaving(true);
+    setIsSubmitting(true);
     try {
-      const docRef = doc(db, 'inspections', 'facility-audit');
-      await updateDoc(docRef, {
-        statusData: JSON.stringify(status),
-        issuesData: JSON.stringify(issues),
+      const docId = editingId || Date.now().toString();
+      const docRef = doc(db, 'car_inspections', docId);
+      
+      const payload = {
+        inspectionDate: formData.inspectionDate,
+        racingModel: formData.series,
+        carNumber: formData.carNumber,
+        teamName: formData.teamName,
+        racerName: formData.racerName,
+        brand: formData.carManufacturer,
+        carModel: formData.model,
+        sealNumber: formData.engineSealNumber,
+        formData: formData,
         updatedAt: new Date().toISOString(),
         userId: auth.currentUser.uid
-      });
-      // Show a brief success state if desired
-      setTimeout(() => setIsSaving(false), 500);
+      };
+
+      if (!editingId) {
+        Object.assign(payload, { createdAt: new Date().toISOString() });
+      }
+
+      await setDoc(docRef, payload, { merge: true });
+      
+      showToast(editingId ? 'Inspection updated successfully' : 'Inspection created successfully');
+      setView('list');
+      setEditingId(null);
+      setFormData(initialFormData);
+      setCurrentStep(1);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'inspections');
-      setIsSaving(false);
+      handleFirestoreError(error, OperationType.WRITE, 'car_inspections');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleEdit = (inspection: Inspection) => {
+    setEditingId(inspection.id);
+    setFormData(inspection.formData || {
+      ...initialFormData,
+      inspectionDate: inspection.inspectionDate || initialFormData.inspectionDate,
+      series: inspection.racingModel || '',
+      carNumber: inspection.carNumber || '',
+      teamName: inspection.teamName || '',
+      racerName: inspection.racerName || '',
+      carManufacturer: inspection.brand || '',
+      model: inspection.carModel || '',
+      engineSealNumber: inspection.sealNumber || ''
+    });
+    setCurrentStep(1);
+    setView('form');
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this inspection?')) {
+      try {
+        await deleteDoc(doc(db, 'car_inspections', id));
+        showToast('Inspection deleted successfully');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'car_inspections');
+      }
+    }
+  };
+
+  // Sorting Logic
+  const requestSort = (key: keyof Inspection) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedAndFilteredInspections = useMemo(() => {
+    let filtered = inspections.filter(item => 
+      (item.racerName || '').toLowerCase().includes(search.toLowerCase()) || 
+      (item.teamName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (item.carNumber || '').includes(search) ||
+      (item.racingModel || '').toLowerCase().includes(search.toLowerCase())
+    );
+
+    if (sortConfig !== null) {
+      filtered.sort((a, b) => {
+        const aVal = a[sortConfig.key] || '';
+        const bVal = b[sortConfig.key] || '';
+        if (aVal < bVal) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aVal > bVal) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return filtered;
+  }, [search, sortConfig, inspections]);
+
+  const renderInput = (label: string, field: string, type = 'text', placeholder = '', className = '') => {
+    const keys = field.split('.');
+    let value = formData as any;
+    for (const key of keys) {
+      value = value?.[key];
+    }
+    
+    return (
+      <div className={`space-y-2 ${className}`}>
+        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
+        <input 
+          type={type} 
+          value={value || ''}
+          onChange={(e) => handleChange(field, e.target.value)}
+          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+          placeholder={placeholder || label}
+        />
+      </div>
+    );
+  };
+
+  const renderCheckbox = (label: string, field: string, className = '') => {
+    const keys = field.split('.');
+    let checked = formData as any;
+    for (const key of keys) {
+      checked = checked?.[key];
+    }
+    
+    return (
+      <label className={`flex items-center gap-3 cursor-pointer group ${className}`}>
+        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${checked ? 'bg-orange-500 border-orange-500' : 'border-slate-300 group-hover:border-orange-400 bg-white'}`}>
+          {checked && <Check className="w-3.5 h-3.5 text-white" />}
+        </div>
+        <span className="text-sm text-slate-700 font-light select-none">{label}</span>
+        <input 
+          type="checkbox" 
+          className="hidden"
+          checked={!!checked}
+          onChange={(e) => handleChange(field, e.target.checked)}
+        />
+      </label>
+    );
   };
 
   if (isLoading) {
@@ -89,118 +354,468 @@ export default function InspectionTab() {
     );
   }
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-12">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-6">
-        <div>
-          <h1 className="text-3xl font-light tracking-tight text-slate-900 mb-2">Facility Inspection</h1>
-          <p className="text-slate-500 font-light text-sm">Track and safety audit form.</p>
-        </div>
-        <button 
-          onClick={saveAudit}
-          disabled={isSaving}
-          className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition-all shadow-sm shadow-orange-500/20 font-medium flex items-center gap-2 disabled:opacity-70"
-        >
-          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-          {isSaving ? 'Saving...' : 'Save Audit'}
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        {SECTIONS.map((section) => (
-          <div key={section.id} className="glass-panel overflow-hidden transition-all duration-300">
-            <button 
-              onClick={() => setExpanded(expanded === section.id ? null : section.id)}
-              className="w-full p-6 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors border-b border-slate-100"
-            >
-              <h3 className="text-lg font-medium text-slate-900">{section.title}</h3>
-              {expanded === section.id ? <ChevronUp className="w-5 h-5 text-slate-500" /> : <ChevronDown className="w-5 h-5 text-slate-500" />}
-            </button>
+  if (view === 'list') {
+    return (
+      <>
+      <motion.div 
+        key="list-view"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="space-y-8 pb-12 max-w-[1400px] mx-auto"
+      >
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-10">
+          <div>
+            <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-3">Inspection Form</h1>
+            <p className="text-slate-500 font-light text-sm">Manage and review car inspection forms.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search inspections..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-full py-2.5 pl-11 pr-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all placeholder:text-slate-400"
+              />
+            </div>
             
-            <AnimatePresence>
-              {expanded === section.id && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="overflow-hidden"
-                >
-                  <div className="p-6 space-y-6">
-                    {section.items.map((item) => {
-                      const itemId = `${section.id}-${item}`;
-                      const itemStatus = status[itemId];
-                      
-                      return (
-                        <div key={item} className="p-4 bg-white rounded-xl border border-slate-100 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-slate-800">{item}</p>
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => handleStatus(itemId, 'pass')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border ${
-                                  itemStatus === 'pass' 
-                                    ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/50 shadow-[0_0_10px_rgba(52,211,153,0.2)]' 
-                                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                Pass
-                              </button>
-                              <button 
-                                onClick={() => handleStatus(itemId, 'fail')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border ${
-                                  itemStatus === 'fail' 
-                                    ? 'bg-rose-500/20 text-rose-500 border-rose-500/50 shadow-[0_0_10px_rgba(244,63,94,0.2)]' 
-                                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                Issue
-                              </button>
-                            </div>
-                          </div>
+            <button 
+              onClick={() => {
+                setEditingId(null);
+                setFormData(initialFormData);
+                setCurrentStep(1);
+                setView('form');
+              }}
+              className="whitespace-nowrap px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10"
+            >
+              Create Inspection Form
+            </button>
+          </div>
+        </div>
 
-                          <AnimatePresence>
-                            {itemStatus === 'fail' && (
-                              <motion.div 
-                                initial={{ opacity: 0, y: -10, height: 0 }}
-                                animate={{ opacity: 1, y: 0, height: 'auto' }}
-                                exit={{ opacity: 0, y: -10, height: 0 }}
-                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                className="pt-4 border-t border-slate-100 space-y-4"
-                              >
-                                <div className="space-y-2">
-                                  <label className="text-xs text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                    <AlertTriangle className="w-3 h-3" /> Describe Issue
-                                  </label>
-                                  <textarea 
-                                    rows={2}
-                                    value={issues[itemId] || ''}
-                                    onChange={(e) => handleIssueChange(itemId, e.target.value)}
-                                    className="w-full bg-slate-100 border border-rose-500/30 rounded-lg px-4 py-2 text-sm font-light focus:outline-none focus:border-rose-500/60 transition-colors resize-none text-slate-800"
-                                    placeholder="E.g., Deep rut on apex curb..."
-                                  />
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <button className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-700 transition-colors">
-                                    <Camera className="w-4 h-4" /> Add Photo
-                                  </button>
-                                  <button className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-700 transition-colors">
-                                    <UserPlus className="w-4 h-4" /> Assign Fix
-                                  </button>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+        <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden flex flex-col">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[1200px]">
+              <thead>
+                <tr>
+                  <SortableHeader label="ID" sortKey="id" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="INSPECTION DATE" sortKey="inspectionDate" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="RACING MODEL" sortKey="racingModel" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="CAR NUMBER" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="TEAM NAME" sortKey="teamName" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="RACER NAME" sortKey="racerName" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="BRAND" sortKey="brand" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="CAR MODEL" sortKey="carModel" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="SEAL NUMBER" sortKey="sealNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <AnimatePresence>
+                  {sortedAndFilteredInspections.map((item, index) => (
+                    <motion.tr 
+                      layout
+                      key={item.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative"
+                    >
+                      <td className="px-6 py-5 relative">
+                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-sm text-slate-500 font-light">{index + 1}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-600 font-light">{item.inspectionDate}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-900 font-medium">{item.racingModel}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-900 font-medium">{item.carNumber}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-600 font-light">{item.teamName}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-600 font-light">{item.racerName}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-600 font-light">{item.brand}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-600 font-light">{item.carModel}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-600 font-light">{item.sealNumber}</span>
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => handleEdit(item)}
+                            className="px-3 py-1 text-[11px] uppercase tracking-wider font-medium text-orange-500 border border-orange-200 rounded hover:bg-orange-50 transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(item.id)}
+                            className="px-3 py-1 text-[11px] uppercase tracking-wider font-medium text-rose-500 border border-rose-200 rounded hover:bg-rose-50 transition-colors"
+                          >
+                            Delete
+                          </button>
                         </div>
-                      );
-                    })}
+                      </td>
+                    </motion.tr>
+                  ))}
+                  {sortedAndFilteredInspections.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="px-6 py-12 text-center text-slate-400 font-light">
+                        No inspections found.
+                      </td>
+                    </tr>
+                  )}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center">
+            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5">
+              <select 
+                value={recordsPerPage}
+                onChange={(e) => setRecordsPerPage(Number(e.target.value))}
+                className="bg-transparent border-none text-sm text-slate-600 focus:ring-0 outline-none cursor-pointer"
+              >
+                <option value={10}>10 records</option>
+                <option value={20}>20 records</option>
+                <option value={50}>50 records</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {renderToast()}
+    </>
+    );
+  }
+
+  return (
+    <>
+      <motion.div 
+        key="form-view"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="max-w-4xl mx-auto pb-12"
+      >
+        <div className="mb-10 flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => setView('list')}
+              className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2">
+                {editingId ? 'Edit Inspection' : 'New Inspection'}
+              </h1>
+              <p className="text-slate-500 font-light text-sm">Fill in the car inspection details.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8 md:p-12">
+          {/* Stepper */}
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-4 relative">
+              {[1, 2, 3, 4].map((step) => (
+                <div key={step} className="flex flex-col items-center gap-2 relative z-10">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= step ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 text-slate-400'}`}>
+                    {currentStep > step ? <CheckCircle2 className="w-5 h-5" /> : step}
+                  </div>
+                  <span className={`text-[10px] uppercase tracking-wider font-medium absolute -bottom-6 whitespace-nowrap ${currentStep >= step ? 'text-orange-600' : 'text-slate-400'}`}>
+                    {step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Inspection' : 'Seal'}
+                  </span>
+                </div>
+              ))}
+              <div className="absolute left-12 right-12 h-1 bg-slate-100 rounded-full z-0 top-5">
+                <motion.div 
+                  className="h-full bg-orange-500 rounded-full"
+                  initial={{ width: '0%' }}
+                  animate={{ width: `${((currentStep - 1) / (totalSteps - 1)) * 100}%` }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="min-h-[400px]">
+            <AnimatePresence mode="wait">
+              {currentStep === 1 && (
+                <motion.div
+                  key="step1"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-8"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {renderInput('Inspection Date', 'inspectionDate', 'date')}
+                    {renderInput('Stadium', 'stadium')}
+                    {renderInput('Series', 'series')}
+                    {renderInput('Grades', 'grades')}
+                    {renderInput('Car Number', 'carNumber')}
+                    {renderInput('Team Name', 'teamName')}
+                    {renderInput('Racer Name', 'racerName')}
+                    {renderInput('Team Manager Name', 'teamManagerName')}
+                  </div>
+                </motion.div>
+              )}
+
+              {currentStep === 2 && (
+                <motion.div
+                  key="step2"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-8"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {renderInput('Car Manufacturer', 'carManufacturer')}
+                    {renderInput('Model', 'model')}
+                    {renderInput('Engine Displacement (CC)', 'engineDisplacement')}
+                    {renderInput('Engine Code', 'engineCode')}
+                    {renderInput('Transmission', 'transmission')}
+                    {renderInput('Drivetrain', 'drivetrain')}
+                    {renderInput('Gear Shift Pattern', 'gearShiftPattern')}
+                  </div>
+                  
+                  <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {renderCheckbox('Auto Gear more than 6 Speed', 'autoGearMoreThan6')}
+                    {renderCheckbox('Paddle Shift', 'paddleShift')}
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100">
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Tire Mark Amount</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {renderInput('Yokohama', 'tireMarkAmount.yokohama')}
+                      {renderInput('Hankook', 'tireMarkAmount.hankook')}
+                      {renderInput('Giti', 'tireMarkAmount.giti')}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {currentStep === 3 && (
+                <motion.div
+                  key="step3"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-8"
+                >
+                  <div>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Car Light</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {renderCheckbox('Head Light', 'carLight.headLight')}
+                      {renderCheckbox('Turn Signal', 'carLight.turnSignal')}
+                      {renderCheckbox('Tail Light', 'carLight.tailLight')}
+                      {renderCheckbox('Break Light', 'carLight.breakLight')}
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100">
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Car Equipment</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">Tow Point</span>
+                        <div className="flex gap-4">
+                          {renderCheckbox('Installed', 'carEquipment.towPoint.installed')}
+                          {renderCheckbox('Sticker', 'carEquipment.towPoint.sticker')}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">Bonnet Lock</span>
+                        <div className="flex gap-4">
+                          {renderCheckbox('Installed', 'carEquipment.bonnetLock.installed')}
+                          {renderCheckbox('Sticker', 'carEquipment.bonnetLock.sticker')}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">Extinguisher</span>
+                        <div className="flex gap-4">
+                          {renderCheckbox('Installed', 'carEquipment.extinguisher.installed')}
+                          {renderCheckbox('Sticker', 'carEquipment.extinguisher.sticker')}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">Outside Kill Switch</span>
+                        <div className="flex gap-4">
+                          {renderCheckbox('Installed', 'carEquipment.outsideKillSwitch.installed')}
+                          {renderCheckbox('Sticker', 'carEquipment.outsideKillSwitch.sticker')}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">Inside Kill Switch</span>
+                        <div className="flex gap-4">
+                          {renderCheckbox('Installed', 'carEquipment.insideKillSwitch.installed')}
+                          {renderCheckbox('Sticker', 'carEquipment.insideKillSwitch.sticker')}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">Seat</span>
+                        <div className="flex gap-4">
+                          {renderCheckbox('Installed', 'carEquipment.seat.installed')}
+                          {renderCheckbox('Sticker', 'carEquipment.seat.sticker')}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">Harnesses</span>
+                        <div className="flex gap-4">
+                          {renderCheckbox('Installed', 'carEquipment.harnesses.installed')}
+                          {renderCheckbox('Sticker', 'carEquipment.harnesses.sticker')}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-600">Roll Over Bar</span>
+                        <div className="flex gap-4">
+                          {renderCheckbox('Installed', 'carEquipment.rollOverBar.installed')}
+                          {renderCheckbox('Sticker', 'carEquipment.rollOverBar.sticker')}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100">
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Racer Safety</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {renderCheckbox('Helmet', 'racerSafety.helmet')}
+                      {renderCheckbox('HANS', 'racerSafety.hans')}
+                      {renderCheckbox('Balaclava', 'racerSafety.balaclava')}
+                      {renderCheckbox('Glove', 'racerSafety.glove')}
+                      {renderCheckbox('Race Suite', 'racerSafety.raceSuite')}
+                      {renderCheckbox('Sponsor Tag', 'racerSafety.sponsorTag')}
+                      {renderCheckbox('Shoes', 'racerSafety.shoes')}
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {renderInput('Engine Seal Number', 'engineSealNumber')}
+                    {renderInput('Gear Seal Number', 'gearSealNumber')}
+                    {renderInput('Tire Mark Amount', 'tireMarkAmountStep3')}
+                    {renderInput('Balance of Performance', 'balanceOfPerformance')}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {renderCheckbox('PTRS Smoke Detector', 'ptrsSmokeDetector')}
+                    {renderCheckbox('Weight Added After Race 2', 'weightAddedAfterRace2')}
+                  </div>
+
+                  {renderInput('Remark', 'remark')}
+                </motion.div>
+              )}
+
+              {currentStep === 4 && (
+                <motion.div
+                  key="step4"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-8"
+                >
+                  <div>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Change Engine Seal</h3>
+                    <div className="flex gap-6 mb-6">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="changeSeal" 
+                          value="Not Change Seal"
+                          checked={formData.changeSeal === 'Not Change Seal'}
+                          onChange={(e) => handleChange('changeSeal', e.target.value)}
+                          className="text-orange-500 focus:ring-orange-500"
+                        />
+                        <span className="text-sm text-slate-700">Not Change Seal</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="changeSeal" 
+                          value="Change Seal"
+                          checked={formData.changeSeal === 'Change Seal'}
+                          onChange={(e) => handleChange('changeSeal', e.target.value)}
+                          className="text-orange-500 focus:ring-orange-500"
+                        />
+                        <span className="text-sm text-slate-700">Change Seal</span>
+                      </label>
+                    </div>
+
+                    {formData.changeSeal === 'Change Seal' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {renderInput('Current Engine Seal Number', 'currentEngineSealNumber')}
+                        {renderInput('New Engine Seal Number', 'newEngineSealNumber')}
+                        <div className="md:col-span-2">
+                          {renderInput('Reason for changing seal', 'reasonForChangingSeal')}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        ))}
-      </div>
-    </div>
+
+          <div className="mt-12 flex justify-between pt-6 border-t border-slate-100">
+            {currentStep > 1 ? (
+              <button 
+                onClick={() => setCurrentStep(prev => prev - 1)}
+                className="px-8 py-3 rounded-full text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
+              >
+                Back
+              </button>
+            ) : (
+              <button 
+                onClick={() => setView('list')}
+                className="px-8 py-3 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+            
+            {currentStep < totalSteps ? (
+              <button 
+                onClick={() => setCurrentStep(prev => prev + 1)}
+                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10"
+              >
+                Continue
+              </button>
+            ) : (
+              <button 
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70"
+              >
+                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {editingId ? 'Update Inspection' : 'Submit Inspection'}
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {renderToast()}
+    </>
   );
 }

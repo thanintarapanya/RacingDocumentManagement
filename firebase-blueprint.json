@@ -102,6 +102,26 @@
       },
       "required": ["topics"]
     },
+    "CarInspection": {
+      "title": "CarInspection",
+      "description": "Car inspection form data",
+      "type": "object",
+      "properties": {
+        "inspectionDate": { "type": "string" },
+        "racingModel": { "type": "string" },
+        "carNumber": { "type": "string" },
+        "teamName": { "type": "string" },
+        "racerName": { "type": "string" },
+        "brand": { "type": "string" },
+        "carModel": { "type": "string" },
+        "sealNumber": { "type": "string" },
+        "formData": { "type": "object" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "createdAt", "updatedAt"]
+    },
     "Inspection": {
       "title": "Inspection",
       "description": "Facility inspection audit",
@@ -166,6 +186,10 @@
     "/checklists/{checklistId}": {
       "schema": { "$ref": "#/entities/Checklist" },
       "description": "Collection of checklists"
+    },
+    "/car_inspections/{inspectionId}": {
+      "schema": { "$ref": "#/entities/CarInspection" },
+      "description": "Collection of car inspections"
     },
     "/inspections/{inspectionId}": {
       "schema": { "$ref": "#/entities/Inspection" },

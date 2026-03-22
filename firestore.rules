@@ -77,6 +77,20 @@ service cloud.firestore {
              data.topics is list;
     }
 
+    function isValidCarInspection(data) {
+      return hasRequiredFields(['userId', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.createdAt is string && data.updatedAt is string &&
+             (!('inspectionDate' in data) || data.inspectionDate is string) &&
+             (!('racingModel' in data) || data.racingModel is string) &&
+             (!('carNumber' in data) || data.carNumber is string) &&
+             (!('teamName' in data) || data.teamName is string) &&
+             (!('racerName' in data) || data.racerName is string) &&
+             (!('brand' in data) || data.brand is string) &&
+             (!('carModel' in data) || data.carModel is string) &&
+             (!('sealNumber' in data) || data.sealNumber is string) &&
+             (!('formData' in data) || data.formData is map);
+    }
+
     function isValidInspection(data) {
       return hasRequiredFields(['statusData', 'issuesData', 'userId', 'createdAt', 'updatedAt']) &&
              data.statusData is string && data.issuesData is string &&
@@ -132,6 +146,13 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidSettings(request.resource.data) && isAdmin();
       allow update: if isAuthenticated() && isValidSettings(request.resource.data) && isAdmin();
       allow delete: if isAdmin();
+    }
+
+    match /car_inspections/{inspectionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidCarInspection(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidCarInspection(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
     }
 
     match /inspections/{inspectionId} {
