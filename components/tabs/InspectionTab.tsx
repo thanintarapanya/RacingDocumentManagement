@@ -21,7 +21,8 @@ export default function InspectionTab() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    const user = auth.currentUser;
+    if (!user) return;
     
     // We use a single document for the facility audit for simplicity in this prototype
     const docRef = doc(db, 'inspections', 'facility-audit');
@@ -39,7 +40,7 @@ export default function InspectionTab() {
         setDoc(docRef, {
           statusData: '{}',
           issuesData: '{}',
-          userId: auth.currentUser.uid,
+          userId: user.uid,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }).catch(e => handleFirestoreError(e, OperationType.CREATE, 'inspections'));
