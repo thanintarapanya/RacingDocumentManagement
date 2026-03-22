@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "info@embeddedlinuxgroup.com" && request.auth.token.email_verified == true));
+    }
+
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidEntry(data) {
+      return hasRequiredFields(['nameEn', 'userId', 'createdAt', 'updatedAt']) &&
+             data.nameEn is string && data.nameEn.size() > 0 && data.nameEn.size() < 100 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.createdAt is string &&
+             data.updatedAt is string;
+    }
+
+    function isValidDeletedItem(data) {
+      return hasRequiredFields(['type', 'name', 'deletedBy', 'deletedAt', 'userId']) &&
+             data.type is string &&
+             data.name is string &&
+             data.deletedBy is string &&
+             data.deletedAt is string &&
+             data.userId is string;
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['email', 'role', 'createdAt']) &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'user'] &&
+             data.createdAt is string;
+    }
+
+    function isValidChecklist(data) {
+      return hasRequiredFields(['teamName', 'carNumber', 'className', 'items', 'userId', 'createdAt', 'updatedAt']) &&
+             data.teamName is string && data.carNumber is string && data.className is string &&
+             data.items is string && data.userId is string && data.createdAt is string && data.updatedAt is string;
+    }
+
+    function isValidInspection(data) {
+      return hasRequiredFields(['statusData', 'issuesData', 'userId', 'createdAt', 'updatedAt']) &&
+             data.statusData is string && data.issuesData is string &&
+             data.userId is string && data.createdAt is string && data.updatedAt is string;
+    }
+
+    function isValidReport(data) {
+      return hasRequiredFields(['team', 'car', 'className', 'status', 'userId', 'createdAt', 'updatedAt']) &&
+             data.team is string && data.car is string && data.className is string && data.status is string &&
+             data.userId is string && data.createdAt is string && data.updatedAt is string;
+    }
+
+    function isValidRequest(data) {
+      return hasRequiredFields(['type', 'team', 'car', 'status', 'date', 'userId', 'createdAt', 'updatedAt']) &&
+             data.type is string && data.team is string && data.car is string && data.status is string && data.date is string &&
+             data.userId is string && data.createdAt is string && data.updatedAt is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /entries/{entryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidEntry(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidEntry(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+
+    match /deletedItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidDeletedItem(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidDeletedItem(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin());
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == 'user') || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /checklists/{checklistId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidChecklist(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidChecklist(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+
+    match /inspections/{inspectionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidInspection(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidInspection(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidReport(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidReport(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+
+    match /requests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidRequest(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidRequest(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "entities": {
+    "EntryForm": {
+      "title": "EntryForm",
+      "description": "A competitor's entry form for the race",
+      "type": "object",
+      "properties": {
+        "series": { "type": "string" },
+        "grade": { "type": "string" },
+        "carNumber": { "type": "string" },
+        "stadium": { "type": "string" },
+        "nameThai": { "type": "string" },
+        "nameEnglish": { "type": "string" },
+        "dob": { "type": "string" },
+        "bloodType": { "type": "string" },
+        "nationality": { "type": "string" },
+        "idCard": { "type": "string" },
+        "address": { "type": "string" },
+        "postcode": { "type": "string" },
+        "email": { "type": "string" },
+        "mobileNo": { "type": "string" },
+        "idLine": { "type": "string" },
+        "instagram": { "type": "string" },
+        "facebook": { "type": "string" },
+        "youtube": { "type": "string" },
+        "tiktok": { "type": "string" },
+        "competitionLicenseNo": { "type": "string" },
+        "categorizationGrade": { "type": "string" },
+        "issuedBy": { "type": "string" },
+        "dateOfIssued": { "type": "string" },
+        "expiryDate": { "type": "string" },
+        "carManufacturer": { "type": "string" },
+        "model": { "type": "string" },
+        "color": { "type": "string" },
+        "year": { "type": "string" },
+        "engineSize": { "type": "string" },
+        "engineCode": { "type": "string" },
+        "teamName": { "type": "string" },
+        "teamManagerName": { "type": "string" },
+        "managerMobileNo": { "type": "string" },
+        "requireTogetherForPitArea": { "type": "string" },
+        "addressForSendDocument": { "type": "string" },
+        "teamPostcode": { "type": "string" },
+        "teamMobileNo": { "type": "string" },
+        "consentingParty": { "type": "string" },
+        "signDate": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" },
+        "userId": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "nameTh": { "type": "string" },
+        "seriesRace": { "type": "string" },
+        "gradeRace": { "type": "string" },
+        "formData": { "type": "string" }
+      },
+      "required": ["nameEn", "nameTh", "seriesRace", "gradeRace", "carNumber", "userId", "createdAt", "updatedAt"]
+    },
+    "DeletedItem": {
+      "title": "DeletedItem",
+      "description": "A soft-deleted item",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "name": { "type": "string" },
+        "deletedBy": { "type": "string" },
+        "deletedAt": { "type": "timestamp" },
+        "expires": { "type": "string" },
+        "originalData": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["type", "name", "deletedBy", "deletedAt", "userId"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile and role",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "Checklist": {
+      "title": "Checklist",
+      "description": "Pre-scrutineering compliance matrix",
+      "type": "object",
+      "properties": {
+        "teamName": { "type": "string" },
+        "carNumber": { "type": "string" },
+        "className": { "type": "string" },
+        "items": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["teamName", "carNumber", "className", "items", "userId", "createdAt", "updatedAt"]
+    },
+    "Inspection": {
+      "title": "Inspection",
+      "description": "Facility inspection audit",
+      "type": "object",
+      "properties": {
+        "statusData": { "type": "string" },
+        "issuesData": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["statusData", "issuesData", "userId", "createdAt", "updatedAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Scrutineering report",
+      "type": "object",
+      "properties": {
+        "team": { "type": "string" },
+        "car": { "type": "string" },
+        "className": { "type": "string" },
+        "status": { "type": "string" },
+        "weight": { "type": "string" },
+        "restrictor": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["team", "car", "className", "status", "userId", "createdAt", "updatedAt"]
+    },
+    "Request": {
+      "title": "Request",
+      "description": "Competitor request",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "team": { "type": "string" },
+        "car": { "type": "string" },
+        "status": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["type", "team", "car", "status", "date", "userId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/entries/{entryId}": {
+      "schema": { "$ref": "#/entities/EntryForm" },
+      "description": "Collection of race entry forms"
+    },
+    "/deletedItems/{itemId}": {
+      "schema": { "$ref": "#/entities/DeletedItem" },
+      "description": "Collection of deleted items"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of user profiles"
+    },
+    "/checklists/{checklistId}": {
+      "schema": { "$ref": "#/entities/Checklist" },
+      "description": "Collection of checklists"
+    },
+    "/inspections/{inspectionId}": {
+      "schema": { "$ref": "#/entities/Inspection" },
+      "description": "Collection of facility inspections"
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Collection of scrutineering reports"
+    },
+    "/requests/{requestId}": {
+      "schema": { "$ref": "#/entities/Request" },
+      "description": "Collection of competitor requests"
+    }
+  }
+}
