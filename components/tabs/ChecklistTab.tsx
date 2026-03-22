@@ -1,235 +1,422 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import * as Progress from '@radix-ui/react-progress';
-import { Check, AlertCircle, Search, Filter, Loader2 } from 'lucide-react';
+import { useAppStore, type Entry } from '@/lib/store';
+import { 
+  Search, 
+  ChevronUp, 
+  ChevronDown, 
+  CheckCircle2,
+  Loader2,
+  MoreHorizontal,
+  FileText
+} from 'lucide-react';
+
+const SERIES_CATEGORIES = [
+  'Siam GT', 
+  'Siam1500', 
+  'Siam Group N', 
+  'Siam Group A', 
+  'Siam Truck', 
+  'Siam Eco'
+];
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, query } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 
-type Checklist = {
-  id: string;
-  teamName: string;
-  carNumber: string;
-  className: string;
-  items: boolean[];
-  userId?: string;
+const SortableHeader = ({ 
+  label, 
+  sortKey, 
+  align = 'left',
+  sortConfig,
+  requestSort
+}: { 
+  label: string, 
+  sortKey: string, 
+  align?: 'left' | 'right' | 'center',
+  sortConfig: { key: string, direction: 'asc' | 'desc' } | null,
+  requestSort: (key: string) => void
+}) => {
+  const isActive = sortConfig?.key === sortKey;
+  return (
+    <th 
+      className={`px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 cursor-pointer hover:text-slate-700 hover:bg-slate-50/50 transition-colors select-none ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}`}
+      onClick={() => requestSort(sortKey)}
+    >
+      <div className={`flex items-center gap-2 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
+        {label}
+        <span className="flex flex-col">
+          <ChevronUp className={`w-2 h-2 ${isActive && sortConfig.direction === 'asc' ? 'text-orange-500' : 'text-slate-300'}`} />
+          <ChevronDown className={`w-2 h-2 -mt-0.5 ${isActive && sortConfig.direction === 'desc' ? 'text-orange-500' : 'text-slate-300'}`} />
+        </span>
+      </div>
+    </th>
+  );
 };
 
-const CHECKLIST_ITEMS = [
-  'Safety Tank Cert',
-  'Roll Cage Cert',
-  'Transponder',
-  'Driver Gear',
-  'Extinguisher'
-];
-
 export default function ChecklistTab() {
-  const [teams, setTeams] = useState<Checklist[]>([]);
+  const { entries } = useAppStore();
   const [search, setSearch] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>('All');
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+  const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
+  const [checklists, setChecklists] = useState<Record<number, boolean>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   useEffect(() => {
     if (!auth.currentUser) return;
-    const q = query(collection(db, 'checklists'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'checklists'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => {
-        const d = doc.data();
-        let parsedItems = [false, false, false, false, false];
-        try {
-          parsedItems = JSON.parse(d.items);
-        } catch (e) {
-          console.error('Failed to parse items', e);
-        }
-        return {
-          id: doc.id,
-          teamName: d.teamName,
-          carNumber: d.carNumber,
-          className: d.className,
-          items: parsedItems,
-          userId: d.userId
-        };
+      const data: Record<number, boolean> = {};
+      snapshot.docs.forEach(doc => {
+        data[Number(doc.id)] = doc.data().isChecked;
       });
-      setTeams(data);
-      setIsLoading(false);
+      setChecklists(data);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'checklists');
-      setIsLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
-  const toggleItem = async (teamId: string, itemIndex: number) => {
-    const team = teams.find(t => t.id === teamId);
-    if (!team || !auth.currentUser) return;
-
-    const newItems = [...team.items];
-    newItems[itemIndex] = !newItems[itemIndex];
-
+  const handleConfirmCheck = async () => {
+    if (selectedEntries.length === 0) return;
+    setIsSubmitting(true);
     try {
-      const docRef = doc(db, 'checklists', teamId);
-      await updateDoc(docRef, {
-        items: JSON.stringify(newItems),
-        updatedAt: new Date().toISOString()
-      });
+      for (const id of selectedEntries) {
+        const docRef = doc(db, 'checklists', id.toString());
+        await setDoc(docRef, {
+          isChecked: true,
+          updatedAt: new Date().toISOString(),
+          userId: auth.currentUser?.uid
+        }, { merge: true });
+      }
+      setSelectedEntries([]);
+      showToast('Candidates successfully checked');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'checklists');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const addDummyTeam = async () => {
-    if (!auth.currentUser) return;
-    const newId = Date.now().toString();
-    try {
-      await setDoc(doc(db, 'checklists', newId), {
-        teamName: 'New Team ' + Math.floor(Math.random() * 1000),
-        carNumber: '#' + Math.floor(Math.random() * 100),
-        className: 'GT3',
-        items: JSON.stringify([false, false, false, false, false]),
-        userId: auth.currentUser.uid,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedAndFilteredEntries = useMemo(() => {
+    let filtered = entries.filter(entry => 
+      (entry.nameEn.toLowerCase().includes(search.toLowerCase()) || 
+      entry.nameTh.includes(search) ||
+      entry.carNumber.includes(search)) &&
+      (activeTab === 'All' || (entry.seriesRace || '').toLowerCase() === activeTab.toLowerCase())
+    );
+
+    if (sortConfig !== null) {
+      filtered.sort((a, b) => {
+        let aValue: any = a[sortConfig.key as keyof Entry];
+        let bValue: any = b[sortConfig.key as keyof Entry];
+
+        if (sortConfig.key === 'licenseNumber') {
+          aValue = a.formData?.competitionLicenseNo || '';
+          bValue = b.formData?.competitionLicenseNo || '';
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
       });
+    }
+    return filtered;
+  }, [search, sortConfig, entries]);
+
+  const groupedEntries = useMemo(() => {
+    const grouped = SERIES_CATEGORIES.map(category => ({
+      category,
+      entries: [] as Entry[]
+    }));
+    const otherGroup = { category: 'Other', entries: [] as Entry[] };
+
+    sortedAndFilteredEntries.forEach(entry => {
+      const catIndex = SERIES_CATEGORIES.findIndex(
+        c => c.toLowerCase() === (entry.seriesRace || '').toLowerCase()
+      );
+      if (catIndex !== -1) {
+        grouped[catIndex].entries.push(entry);
+      } else {
+        otherGroup.entries.push(entry);
+      }
+    });
+
+    if (otherGroup.entries.length > 0) {
+      grouped.push(otherGroup);
+    }
+
+    return grouped.filter(g => g.entries.length > 0);
+  }, [sortedAndFilteredEntries]);
+
+  const exportToPDF = async () => {
+    setIsExporting(true);
+    try {
+      // @ts-ignore
+      const html2pdf = (await import('html2pdf.js')).default;
+      const element = document.getElementById('checklist-table-container');
+      
+      const opt = {
+        margin:       0.4,
+        filename:     `candidate-checklist-${new Date().toISOString().split('T')[0]}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+      };
+      
+      await html2pdf().set(opt).from(element).save();
+      showToast('PDF Exported Successfully');
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'checklists');
+      console.error('PDF Export Error:', error);
+      showToast('Failed to export PDF');
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  const filteredTeams = teams.filter(t => 
-    t.teamName.toLowerCase().includes(search.toLowerCase()) || 
-    t.carNumber.includes(search)
+  const toggleSelectAll = () => {
+    if (selectedEntries.length === sortedAndFilteredEntries.length && sortedAndFilteredEntries.length > 0) {
+      setSelectedEntries([]);
+    } else {
+      setSelectedEntries(sortedAndFilteredEntries.map(e => e.id));
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedEntries(prev => 
+      prev.includes(id) ? prev.filter(entryId => entryId !== id) : [...prev, id]
+    );
+  };
+
+  const renderToast = () => (
+    <AnimatePresence>
+      {toastMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+          className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3"
+        >
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <p className="text-sm font-medium">{toastMessage}</p>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <h1 className="text-3xl font-light tracking-tight text-slate-900 mb-2">Candidate Checklist</h1>
-          <p className="text-slate-500 font-light text-sm">Pre-scrutineering compliance matrix.</p>
-        </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input 
-              type="text" 
-              placeholder="Search teams or cars..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg py-2 pl-9 pr-4 text-sm font-light focus:outline-none focus:border-orange-500/50 transition-colors"
-            />
+    <>
+      <motion.div 
+        key="checklist-view"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="space-y-8 pb-12 max-w-[1400px] mx-auto"
+      >
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-8">
+          <div>
+            <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-3">Candidate Checklist</h1>
+            <p className="text-slate-500 font-light text-sm">Manage and verify track day checks for candidates.</p>
           </div>
-          <button onClick={addDummyTeam} className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">
-            Add Team
-          </button>
-        </div>
-      </div>
+          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+            <button 
+              onClick={exportToPDF}
+              disabled={isExporting || sortedAndFilteredEntries.length === 0}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 hover:border-orange-200 hover:bg-orange-50 text-slate-700 rounded-full text-sm font-medium transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isExporting ? <Loader2 className="w-4 h-4 text-orange-500 animate-spin" /> : <FileText className="w-4 h-4 text-orange-500" />}
+              <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export PDF'}</span>
+            </button>
 
-      <div className="glass-panel overflow-hidden">
-        {isLoading ? (
-          <div className="p-12 flex justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+            <button 
+              onClick={handleConfirmCheck}
+              disabled={selectedEntries.length === 0 || isSubmitting}
+              className="whitespace-nowrap px-6 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10 flex items-center gap-2"
+            >
+              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              Confirm Check Candidate
+            </button>
+
+            <div className="relative flex-1 min-w-[200px] ml-auto xl:ml-4">
+              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search candidates..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-full py-2.5 pl-11 pr-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all placeholder:text-slate-400"
+              />
+            </div>
+            
+            <button className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-600 rounded-full transition-all shadow-sm">
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
           </div>
-        ) : teams.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 font-light">
-            No checklists found. Click &quot;Add Team&quot; to create one.
-          </div>
-        ) : (
+        </div>
+
+        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+          <button
+            onClick={() => setActiveTab('All')}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+              activeTab === 'All' 
+                ? 'bg-slate-900 text-white shadow-md' 
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            All Series
+          </button>
+          {SERIES_CATEGORIES.map(category => (
+            <button
+              key={category}
+              onClick={() => setActiveTab(category)}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                activeTab === category 
+                  ? 'bg-slate-900 text-white shadow-md' 
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+              }`}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+
+        <div id="checklist-table-container" className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
-                <tr className="border-b border-slate-200 bg-white">
-                  <th className="p-4 font-medium text-sm text-slate-700 whitespace-nowrap">Team / Car</th>
-                  <th className="p-4 font-medium text-sm text-slate-700 whitespace-nowrap w-48">Progress</th>
-                  {CHECKLIST_ITEMS.map((item, i) => (
-                    <th key={i} className="p-4 font-medium text-xs text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">
-                      {item}
-                    </th>
-                  ))}
+                <tr>
+                  <th data-html2canvas-ignore className="px-6 py-5 border-b border-slate-100 w-16">
+                    <div className="flex items-center justify-center">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedEntries.length > 0 && selectedEntries.length === sortedAndFilteredEntries.length}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 rounded border-slate-300 accent-orange-500 cursor-pointer"
+                      />
+                    </div>
+                  </th>
+                  <SortableHeader label="NAME (EN)" sortKey="nameEn" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="NAME (TH)" sortKey="nameTh" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="SERIES RACE" sortKey="seriesRace" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="GRADE RACE" sortKey="gradeRace" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="CAR NUMBER" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="LICENSE NUMBER" sortKey="licenseNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-center">
+                    TRACK DAY CHECK
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {filteredTeams.map((team) => {
-                    const completedCount = team.items.filter(Boolean).length;
-                    const progress = (completedCount / CHECKLIST_ITEMS.length) * 100;
-                    const isComplete = progress === 100;
-
-                    return (
-                      <motion.tr 
-                        key={team.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="border-b border-slate-100 hover:bg-slate-50 transition-colors group"
-                      >
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-medium text-sm border ${
-                              isComplete ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' : 'bg-slate-50 text-slate-700 border-slate-200'
-                            }`}>
-                              {team.carNumber}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-slate-800">{team.teamName}</p>
-                              <p className="text-xs text-slate-500">{team.className}</p>
-                            </div>
+                  {groupedEntries.map((group) => (
+                    <Fragment key={group.category}>
+                      <tr className="bg-slate-50/80 border-y border-slate-100">
+                        <td colSpan={8} className="px-6 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          {group.category} <span className="text-slate-400 font-normal ml-2">({group.entries.length})</span>
+                        </td>
+                      </tr>
+                      {group.entries.map((entry) => {
+                        const isChecked = checklists[entry.id] || false;
+                        const isSelected = selectedEntries.includes(entry.id);
+                        
+                        return (
+                          <motion.tr 
+                            layout
+                            key={entry.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                            className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative ${isSelected ? 'bg-orange-50/30' : ''}`}
+                            style={{ pageBreakInside: 'avoid' }}
+                          >
+                            <td data-html2canvas-ignore className="px-6 py-5">
+                          <div className="flex items-center justify-center">
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={() => toggleSelect(entry.id)}
+                              className="w-4 h-4 rounded border-slate-300 accent-orange-500 cursor-pointer"
+                            />
                           </div>
                         </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <Progress.Root 
-                              className="relative overflow-hidden bg-slate-100 rounded-full w-full h-2 border border-slate-100" 
-                              value={progress}
-                            >
-                              <Progress.Indicator
-                                className={`h-full w-full transition-transform duration-500 ease-[cubic-bezier(0.65,0,0.35,1)] ${
-                                  isComplete ? 'bg-emerald-500 shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.4)]'
-                                }`}
-                                style={{ transform: `translateX(-${100 - progress}%)` }}
-                              />
-                            </Progress.Root>
-                            <span className={`text-xs font-medium w-8 text-right ${isComplete ? 'text-emerald-500' : 'text-slate-500'}`}>
-                              {Math.round(progress)}%
-                            </span>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-900 font-medium uppercase">{entry.nameEn}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">{entry.nameTh}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light uppercase">{entry.seriesRace}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light uppercase">{entry.gradeRace}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-900 font-medium">{entry.carNumber}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">{entry.formData?.competitionLicenseNo || '-'}</span>
+                        </td>
+                        <td className="px-6 py-5 text-center">
+                          <div className="flex justify-center">
+                            {isChecked ? (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                Checked
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-700">
+                                Not Checked
+                              </span>
+                            )}
                           </div>
                         </td>
-                        {team.items.map((isChecked, i) => (
-                          <td key={i} className="p-4 text-center">
-                            <button
-                              onClick={() => toggleItem(team.id, i)}
-                              className={`w-8 h-8 rounded-lg border flex items-center justify-center mx-auto transition-all duration-300 ${
-                                isChecked 
-                                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.2)]' 
-                                  : 'bg-white border-slate-200 text-transparent hover:border-slate-300'
-                              }`}
-                            >
-                              <AnimatePresence>
-                                {isChecked && (
-                                  <motion.div
-                                    initial={{ scale: 0, rotate: -45 }}
-                                    animate={{ scale: 1.1, rotate: 0 }}
-                                    exit={{ scale: 0, rotate: 45 }}
-                                    transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                                  >
-                                    <Check className="w-5 h-5" />
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </button>
-                          </td>
-                        ))}
-                      </motion.tr>
-                    );
-                  })}
+                          </motion.tr>
+                        );
+                      })}
+                    </Fragment>
+                  ))}
                 </AnimatePresence>
+                
+                {sortedAndFilteredEntries.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500 font-light">
+                      No candidates found.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      </motion.div>
+
+      {renderToast()}
+    </>
   );
 }
