@@ -86,21 +86,21 @@ export default function RequestTab() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-slate-200 pb-6">
         <div>
           <h1 className="text-3xl font-light tracking-tight text-slate-900 mb-2">Competitor Requests</h1>
           <p className="text-slate-500 font-light text-sm">Manage inquiries, changes, and approvals.</p>
         </div>
-        <div className="flex gap-2 p-1 bg-white rounded-xl border border-slate-200">
+        <div className="flex gap-2 p-1 bg-white rounded-xl border border-slate-200 w-full sm:w-auto">
           <button 
             onClick={() => setActiveTab('inbox')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'inbox' ? 'bg-slate-100 text-slate-900 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'inbox' ? 'bg-slate-100 text-slate-900 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Inbox
           </button>
           <button 
             onClick={() => setActiveTab('new')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'new' ? 'bg-slate-100 text-slate-900 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'new' ? 'bg-slate-100 text-slate-900 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'text-slate-500 hover:text-slate-800'}`}
           >
             New Request
           </button>

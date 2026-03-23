@@ -19,15 +19,16 @@ export default function DeletedTab() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-slate-200 pb-6">
         <div>
           <h1 className="text-3xl font-light tracking-tight text-slate-900 mb-2 flex items-center gap-3">
             <Trash2 className="w-8 h-8 text-rose-500" /> Recently Deleted
           </h1>
           <p className="text-slate-500 font-light text-sm">Recover soft-deleted documents within 7 days.</p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-sm text-rose-500 font-medium">
-          <AlertTriangle className="w-4 h-4" /> Items permanently deleted after 7 days
+        <div className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-sm text-rose-500 font-medium w-full sm:w-auto">
+          <AlertTriangle className="w-4 h-4 shrink-0" /> 
+          <span className="truncate">Items permanently deleted after 7 days</span>
         </div>
       </div>
 

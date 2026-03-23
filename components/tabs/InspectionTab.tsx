@@ -11,7 +11,8 @@ import {
   Loader2,
   ArrowLeft,
   CheckCircle2,
-  Check
+  Check,
+  UploadCloud
 } from 'lucide-react';
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
@@ -124,11 +125,13 @@ const initialFormData = {
 };
 
 export default function InspectionTab() {
-  const [view, setView] = useState<'list' | 'form'>('list');
+  const [view, setView] = useState<'list' | 'form' | 'history-list' | 'history-detail'>('list');
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedHistoryCarNumber, setSelectedHistoryCarNumber] = useState<string | null>(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<Inspection | null>(null);
   
   // Form Wizard States
   const [currentStep, setCurrentStep] = useState(1);
@@ -166,6 +169,64 @@ export default function InspectionTab() {
   );
 
   const [formData, setFormData] = useState(initialFormData);
+
+  const [uploadedFiles, setUploadedFiles] = useState<Record<string, File[]>>({});
+
+  const handleFileChange = (label: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      setUploadedFiles(prev => ({
+        ...prev,
+        [label]: [...(prev[label] || []), ...filesArray]
+      }));
+    }
+  };
+
+  const removeFile = (label: string, index: number) => {
+    setUploadedFiles(prev => ({
+      ...prev,
+      [label]: prev[label].filter((_, i) => i !== index)
+    }));
+  };
+
+  const renderFileUpload = (label: string, hint?: string) => {
+    const files = uploadedFiles[label] || [];
+    return (
+      <div className="space-y-2">
+        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
+        <label className="border border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center hover:bg-orange-50/30 hover:border-orange-200 transition-colors cursor-pointer group relative block">
+          <input 
+            type="file" 
+            multiple 
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            onChange={(e) => handleFileChange(label, e)}
+          />
+          <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-orange-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-all mx-auto">
+            <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-orange-500" />
+          </div>
+          <span className="text-sm font-medium text-slate-700 block">Click to upload</span>
+          <span className="text-xs font-light text-slate-400 mt-1 block">or drag and drop (multiple files allowed)</span>
+        </label>
+        {hint && <p className="text-[11px] text-slate-400 mt-2">{hint}</p>}
+        {files.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {files.map((file, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                <span className="text-xs text-slate-600 truncate max-w-[200px]">{file.name}</span>
+                <button 
+                  type="button" 
+                  onClick={(e) => { e.preventDefault(); removeFile(label, idx); }}
+                  className="text-slate-400 hover:text-rose-500 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'car_inspections'), orderBy('createdAt', 'desc'));
@@ -454,16 +515,25 @@ export default function InspectionTab() {
                         <span className="text-sm text-slate-600 font-light">{item.sealNumber}</span>
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => {
+                              setSelectedHistoryCarNumber(item.carNumber);
+                              setView('history-list');
+                            }}
+                            className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                          >
+                            History
+                          </button>
                           <button 
                             onClick={() => handleEdit(item)}
-                            className="px-3 py-1 text-[11px] uppercase tracking-wider font-medium text-orange-500 border border-orange-200 rounded hover:bg-orange-50 transition-colors"
+                            className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => handleDelete(item.id)}
-                            className="px-3 py-1 text-[11px] uppercase tracking-wider font-medium text-rose-500 border border-rose-200 rounded hover:bg-rose-50 transition-colors"
+                            className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
                           >
                             Delete
                           </button>
@@ -502,6 +572,247 @@ export default function InspectionTab() {
 
       {renderToast()}
     </>
+    );
+  }
+
+  if (view === 'history-list') {
+    const historyInspections = inspections.filter(i => i.carNumber === selectedHistoryCarNumber);
+    return (
+      <>
+        <motion.div 
+          key="history-list-view"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="space-y-8 pb-12 max-w-[1400px] mx-auto"
+        >
+          <div className="mb-10 flex items-center gap-6">
+            <button 
+              onClick={() => setView('list')}
+              className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2">
+                Inspection History
+              </h1>
+              <p className="text-slate-500 font-light text-sm">History for Car Number: {selectedHistoryCarNumber}</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden flex flex-col">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
+                <thead>
+                  <tr>
+                    <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100">ID</th>
+                    <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100">INSPECTION DATE</th>
+                    <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100">RACING MODEL</th>
+                    <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100">TEAM NAME</th>
+                    <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100">RACER NAME</th>
+                    <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-right">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <AnimatePresence>
+                    {historyInspections.map((item, index) => (
+                      <motion.tr 
+                        layout
+                        key={item.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative"
+                      >
+                        <td className="px-6 py-5 relative">
+                          <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <span className="text-sm text-slate-500 font-light">{index + 1}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">{item.inspectionDate}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-900 font-medium">{item.racingModel}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">{item.teamName}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">{item.racerName}</span>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                          <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => {
+                                setSelectedHistoryItem(item);
+                                setView('history-detail');
+                              }}
+                              className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                            >
+                              Detail
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                    {historyInspections.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-light">
+                          No history found.
+                        </td>
+                      </tr>
+                    )}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </motion.div>
+        {renderToast()}
+      </>
+    );
+  }
+
+  if (view === 'history-detail' && selectedHistoryItem) {
+    const data = selectedHistoryItem.formData || {};
+    return (
+      <>
+        <motion.div 
+          key="history-detail-view"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="max-w-4xl mx-auto pb-12"
+        >
+          <div className="mb-10 flex items-center gap-6">
+            <button 
+              onClick={() => setView('history-list')}
+              className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2">
+                Inspection Details
+              </h1>
+              <p className="text-slate-500 font-light text-sm">View detailed inspection information.</p>
+            </div>
+          </div>
+
+          <div className="space-y-8">
+            {/* Driver Info */}
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4">Driver & Series Info</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Inspection Date</h4>
+                  <div className="text-sm font-light text-slate-600">{data.inspectionDate || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Stadium</h4>
+                  <div className="text-sm font-light text-slate-600">{data.stadium || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Series</h4>
+                  <div className="text-sm font-light text-slate-600">{data.series || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Grades</h4>
+                  <div className="text-sm font-light text-slate-600">{data.grades || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Car Number</h4>
+                  <div className="text-sm font-light text-slate-600">{data.carNumber || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Team Name</h4>
+                  <div className="text-sm font-light text-slate-600">{data.teamName || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Racer Name</h4>
+                  <div className="text-sm font-light text-slate-600">{data.racerName || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Team Manager Name</h4>
+                  <div className="text-sm font-light text-slate-600">{data.teamManagerName || '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Car Info */}
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4">Car Info</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Car Manufacturer</h4>
+                  <div className="text-sm font-light text-slate-600">{data.carManufacturer || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Model</h4>
+                  <div className="text-sm font-light text-slate-600">{data.model || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Engine Displacement (CC)</h4>
+                  <div className="text-sm font-light text-slate-600">{data.engineDisplacement || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Engine Code</h4>
+                  <div className="text-sm font-light text-slate-600">{data.engineCode || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Transmission</h4>
+                  <div className="text-sm font-light text-slate-600">{data.transmission || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Drivetrain</h4>
+                  <div className="text-sm font-light text-slate-600">{data.drivetrain || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Gear Shift Pattern</h4>
+                  <div className="text-sm font-light text-slate-600">{data.gearShiftPattern || '-'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Auto Gear more than 6 Speed</h4>
+                  <div className="text-sm font-light text-slate-600">{data.autoGearMoreThan6 ? 'Yes' : 'No'}</div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Paddle Shift</h4>
+                  <div className="text-sm font-light text-slate-600">{data.paddleShift ? 'Yes' : 'No'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Uploaded Pictures */}
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4">Uploaded Pictures</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {['Car Photo', 'Inspection Document'].map((docType) => (
+                  <div key={docType} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <FileText className="w-4 h-4 text-slate-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium text-slate-700">{docType}</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">Document</p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 bg-slate-200/50 text-slate-500 rounded-full text-[10px] uppercase tracking-wider font-medium">
+                      Not Provided
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </motion.div>
+        {renderToast()}
+      </>
     );
   }
 
@@ -771,6 +1082,14 @@ export default function InspectionTab() {
                         </div>
                       </div>
                     )}
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100">
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Uploaded Pictures</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {renderFileUpload('Car Photo', 'Upload a photo of the car')}
+                      {renderFileUpload('Inspection Document', 'Upload any relevant inspection documents')}
+                    </div>
                   </div>
                 </motion.div>
               )}
