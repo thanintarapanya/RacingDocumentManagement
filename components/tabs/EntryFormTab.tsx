@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppStore, type Entry } from '@/lib/store';
 import { 
@@ -687,9 +688,9 @@ export default function EntryFormTab() {
             <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4">Personal Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="lg:col-span-4 flex flex-col md:flex-row items-start gap-6 mb-4">
-                <div className="w-32 h-40 bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 overflow-hidden shrink-0">
+                <div className="relative w-32 h-40 bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 overflow-hidden shrink-0">
                   {uploadedFiles['photo']?.[0] ? (
-                    <img src={URL.createObjectURL(uploadedFiles['photo'][0])} alt="Photo" className="w-full h-full object-cover" />
+                    <Image src={URL.createObjectURL(uploadedFiles['photo'][0])} alt="Photo" fill className="object-cover" />
                   ) : (
                     <span className="text-xs uppercase tracking-wider">Photo</span>
                   )}
