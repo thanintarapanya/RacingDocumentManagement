@@ -15,6 +15,7 @@ import {
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
+import { useAppStore } from '@/lib/store';
 
 interface RequestItem {
   id: string;
@@ -100,6 +101,24 @@ export default function RequestTab() {
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof RequestItem, direction: 'asc' | 'desc' } | null>(null);
   const [recordsPerPage, setRecordsPerPage] = useState(20);
+
+  const entries = useAppStore((state) => state.entries);
+
+  useEffect(() => {
+    if (newRequest.series && newRequest.carNumber) {
+      const entry = entries.find(e => e.seriesRace === newRequest.series && e.carNumber === newRequest.carNumber);
+      if (entry && entry.formData) {
+        setNewRequest(prev => ({
+          ...prev,
+          driverName: entry.formData.nameEnglish || entry.formData.nameThai || '',
+          licenseDriverNo: entry.formData.competitionLicenseNo || '',
+          licenseTeamManagerNo: entry.formData.licenseTeamManagerNo || '',
+          nameRequestPermission: entry.formData.teamManagerName || '',
+          mobileNo: entry.formData.managerMobileNo || '',
+        }));
+      }
+    }
+  }, [newRequest.series, newRequest.carNumber, entries]);
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -231,7 +250,7 @@ export default function RequestTab() {
             </div>
           </div>
 
-          <div className="glass-panel overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden flex flex-col">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[1000px]">
                 <thead>
@@ -326,7 +345,7 @@ export default function RequestTab() {
               </table>
             </div>
             
-            <div className="p-4 border-t border-slate-100 bg-white/30 flex items-center justify-between">
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5">
                 <select 
                   value={recordsPerPage}
@@ -383,34 +402,42 @@ export default function RequestTab() {
           </div>
         </div>
 
-        <div className="glass-panel overflow-hidden">
-          <div className="p-8 sm:p-10">
-            
-            {/* Stepper */}
-            <div className="flex items-center justify-between mb-12 relative max-w-xl mx-auto">
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-slate-100 z-0"></div>
-              <div 
-                className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-orange-500 z-0 transition-all duration-500"
-                style={{ width: currentStep === 1 ? '0%' : '100%' }}
-              ></div>
-              
-              <div className="relative z-10 flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= 1 ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/20' : 'bg-white border-2 border-slate-200 text-slate-400'}`}>
-                  {currentStep > 1 ? <CheckCircle2 className="w-5 h-5" /> : 1}
+        <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8 md:p-12">
+          {/* Stepper */}
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-4 relative max-w-xl mx-auto">
+              {[1, 2].map((step) => (
+                <div key={step} className="flex flex-col items-center gap-2 relative z-10">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= step ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 text-slate-400'}`}>
+                    {currentStep > step ? <CheckCircle2 className="w-5 h-5" /> : step}
+                  </div>
+                  <span className={`text-[10px] uppercase tracking-wider font-medium absolute -bottom-6 whitespace-nowrap ${currentStep >= step ? 'text-orange-600' : 'text-slate-400'}`}>
+                    {step === 1 ? 'Request / Permission' : 'Punishment Rule'}
+                  </span>
                 </div>
-                <span className={`text-xs font-medium mt-3 absolute top-full whitespace-nowrap ${currentStep >= 1 ? 'text-slate-900' : 'text-slate-400'}`}>Request / Permission</span>
-              </div>
-              
-              <div className="relative z-10 flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= 2 ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/20' : 'bg-white border-2 border-slate-200 text-slate-400'}`}>
-                  2
-                </div>
-                <span className={`text-xs font-medium mt-3 absolute top-full whitespace-nowrap ${currentStep >= 2 ? 'text-slate-900' : 'text-slate-400'}`}>Punishment Rule</span>
+              ))}
+              <div className="absolute left-12 right-12 h-1 bg-slate-100 rounded-full z-0 top-5">
+                <motion.div 
+                  className="h-full bg-orange-500 rounded-full"
+                  initial={{ width: '0%' }}
+                  animate={{ width: `${((currentStep - 1) / (2 - 1)) * 100}%` }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
               </div>
             </div>
+          </div>
 
-            {currentStep === 1 && (
-              <div className="space-y-10">
+          <div className="min-h-[400px]">
+            <AnimatePresence mode="wait">
+              {currentStep === 1 && (
+                <motion.div
+                  key="step1"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-10"
+                >
                 {/* Race Information */}
                 <div>
                   <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Race Information</h3>
@@ -421,7 +448,8 @@ export default function RequestTab() {
                         type="text"
                         value={newRequest.race}
                         onChange={(e) => setNewRequest({...newRequest, race: e.target.value})}
-                        className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all"
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        placeholder="Race"
                       />
                     </div>
                     <div className="space-y-2">
@@ -430,7 +458,7 @@ export default function RequestTab() {
                         <select 
                           value={newRequest.circuit}
                           onChange={(e) => setNewRequest({...newRequest, circuit: e.target.value})}
-                          className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
                         >
                           <option value="" disabled></option>
                           <option value="Chang International Circuit">Chang International Circuit</option>
@@ -453,7 +481,7 @@ export default function RequestTab() {
                         placeholder="Name"
                         value={newRequest.driverName}
                         onChange={(e) => setNewRequest({...newRequest, driverName: e.target.value})}
-                        className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
                       />
                     </div>
                     <div className="space-y-2">
@@ -463,7 +491,7 @@ export default function RequestTab() {
                         placeholder="Car Number"
                         value={newRequest.carNumber}
                         onChange={(e) => setNewRequest({...newRequest, carNumber: e.target.value})}
-                        className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
                       />
                     </div>
                     <div className="space-y-2">
@@ -472,7 +500,7 @@ export default function RequestTab() {
                         <select 
                           value={newRequest.series}
                           onChange={(e) => setNewRequest({...newRequest, series: e.target.value})}
-                          className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
                         >
                           <option value="" disabled></option>
                           <option value="SIAM GT">SIAM GT</option>
@@ -494,7 +522,7 @@ export default function RequestTab() {
                         placeholder="License Driver No."
                         value={newRequest.licenseDriverNo}
                         onChange={(e) => setNewRequest({...newRequest, licenseDriverNo: e.target.value})}
-                        className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
                       />
                     </div>
                     <div className="space-y-2">
@@ -504,7 +532,7 @@ export default function RequestTab() {
                         placeholder="License Team Manager No."
                         value={newRequest.licenseTeamManagerNo}
                         onChange={(e) => setNewRequest({...newRequest, licenseTeamManagerNo: e.target.value})}
-                        className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
                       />
                     </div>
                   </div>
@@ -518,10 +546,10 @@ export default function RequestTab() {
                       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Name Request Permission</label>
                       <input 
                         type="text"
-                        placeholder="Team Name"
+                        placeholder="Requester Name"
                         value={newRequest.nameRequestPermission}
                         onChange={(e) => setNewRequest({...newRequest, nameRequestPermission: e.target.value})}
-                        className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
                       />
                     </div>
                     <div className="space-y-2">
@@ -531,7 +559,7 @@ export default function RequestTab() {
                         placeholder="Mobile No."
                         value={newRequest.mobileNo}
                         onChange={(e) => setNewRequest({...newRequest, mobileNo: e.target.value})}
-                        className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
                       />
                     </div>
                   </div>
@@ -542,14 +570,26 @@ export default function RequestTab() {
                         <select 
                           value={newRequest.requestPermissionTopic}
                           onChange={(e) => setNewRequest({...newRequest, requestPermissionTopic: e.target.value})}
-                          className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
                         >
                           <option value="" disabled></option>
+                          <option value="เปลี่ยนเครื่องยนต์">เปลี่ยนเครื่องยนต์</option>
+                          <option value="ตัดซีลเครื่องยนต์">ตัดซีลเครื่องยนต์</option>
+                          <option value="เปลี่ยนเกียร์">เปลี่ยนเกียร์</option>
+                          <option value="ตัดซีลเกียร์">ตัดซีลเกียร์</option>
+                          <option value="นำรถออกนอกสนาม">นำรถออกนอกสนาม</option>
+                          <option value="ขอตรวจสภาพรถแข่ง/ชุดแข่งล่าช้า">ขอตรวจสภาพรถแข่ง/ชุดแข่งล่าช้า</option>
+                          <option value="ขอไม่จับเวลาการแข่งขัน (Qualify)">ขอไม่จับเวลาการแข่งขัน (Qualify)</option>
+                          <option value="มาร์กยาง">มาร์กยาง</option>
+                          <option value="ขออนุญาตใช้อุปกรณ์ที่หมดอายุ">ขออนุญาตใช้อุปกรณ์ที่หมดอายุ</option>
+                          <option value="ขออนุญาตใช้/ไม่ใช้ อุปกรณ์ที่ตรวจ / สภาพอนุญาตเป็นกรณีพิเศษ">ขออนุญาตใช้/ไม่ใช้ อุปกรณ์ที่ตรวจ / สภาพอนุญาตเป็นกรณีพิเศษ</option>
+                          <option value="เปลี่ยนชื่อทีมแข่ง">เปลี่ยนชื่อทีมแข่ง</option>
                           <option value="เปลี่ยนนักแข่งระหว่าง event">เปลี่ยนนักแข่งระหว่าง event</option>
-                          <option value="Number Change">Number Change</option>
-                          <option value="Driver Substitution">Driver Substitution</option>
-                          <option value="Late Scrutineering">Late Scrutineering</option>
-                          <option value="Other">Other</option>
+                          <option value="เปลี่ยนรถแข่งระหว่าง event">เปลี่ยนรถแข่งระหว่าง event</option>
+                          <option value="ขอไม่เข้าร่วมประชุมนักแข่ง">ขอไม่เข้าร่วมประชุมนักแข่ง</option>
+                          <option value="ขอส่งตัวแทนเข้าประชุมนักแข่ง">ขอส่งตัวแทนเข้าประชุมนักแข่ง</option>
+                          <option value="ขอไม่เข้าร่วมการแข่งขัน">ขอไม่เข้าร่วมการแข่งขัน</option>
+                          <option value="อื่นๆ (โปรดระบุ)">อื่นๆ (โปรดระบุ)</option>
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
@@ -561,16 +601,23 @@ export default function RequestTab() {
                         placeholder="Request Permission Detail"
                         value={newRequest.requestPermissionDetail}
                         onChange={(e) => setNewRequest({...newRequest, requestPermissionDetail: e.target.value})}
-                        className="w-full bg-white/50 border border-white/40 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all resize-none placeholder:text-slate-300"
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all resize-none placeholder:text-slate-300"
                       />
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {currentStep === 2 && (
-              <div className="space-y-8">
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="space-y-8"
+              >
                 <div>
                   <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Understand the Punishment Rule</h3>
                   <div className="prose prose-sm max-w-none text-slate-600 font-light space-y-4">
@@ -594,23 +641,23 @@ export default function RequestTab() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
-
+            </AnimatePresence>
           </div>
 
-          <div className="p-6 sm:p-8 border-t border-slate-100 bg-white/30 flex items-center justify-between">
+          <div className="mt-12 flex justify-between pt-6 border-t border-slate-100">
             {currentStep === 1 ? (
               <>
                 <button
                   onClick={() => setActiveTab('inbox')}
-                  className="px-6 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                  className="px-8 py-2.5 rounded-xl text-sm font-medium text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors bg-white"
                 >
-                  Cancel
+                  Back
                 </button>
                 <button 
                   onClick={() => setCurrentStep(2)}
-                  className="px-8 py-2.5 text-sm font-medium text-white bg-orange-500 rounded-xl hover:bg-orange-600 transition-all shadow-sm shadow-orange-500/20"
+                  className="px-8 py-2.5 bg-[#FF6B00] hover:bg-[#e66000] text-white rounded-xl text-sm font-medium transition-all shadow-sm shadow-orange-500/20"
                 >
                   Next
                 </button>
@@ -619,20 +666,17 @@ export default function RequestTab() {
               <>
                 <button
                   onClick={() => setCurrentStep(1)}
-                  className="px-6 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                  className="px-8 py-2.5 rounded-xl text-sm font-medium text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors bg-white"
                 >
                   Back
                 </button>
                 <button 
                   onClick={handleSubmit}
                   disabled={isSubmitting}
-                  className="px-8 py-2.5 text-sm font-medium text-white bg-orange-500 rounded-xl hover:bg-orange-600 transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="px-8 py-2.5 bg-[#FF6B00] hover:bg-[#e66000] text-white rounded-xl text-sm font-medium transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70"
                 >
-                  {isSubmitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
-                  ) : (
-                    <><Send className="w-4 h-4" /> Submit</>
-                  )}
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Submit Request
                 </button>
               </>
             )}
