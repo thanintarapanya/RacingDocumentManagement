@@ -261,31 +261,7 @@ export default function ChecklistTab() {
   }, [sortedAndFilteredEntries]);
 
   const exportToPDF = async () => {
-    setIsExporting(true);
-    try {
-      // @ts-ignore
-      const html2pdf = (await import('html2pdf.js')).default;
-      const element = document.getElementById('checklist-table-container');
-      if (!element) {
-        throw new Error('Checklist container not found');
-      }
-      
-      const opt: any = {
-        margin:       0.4,
-        filename:     `candidate-checklist-${new Date().toISOString().split('T')[0]}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true },
-        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
-      };
-      
-      await html2pdf().set(opt).from(element).save();
-      showToast('PDF Exported Successfully');
-    } catch (error) {
-      console.error('PDF Export Error:', error);
-      showToast('Failed to export PDF');
-    } finally {
-      setIsExporting(false);
-    }
+    window.print();
   };
 
   const toggleSelectAll = () => {
@@ -337,7 +313,7 @@ export default function ChecklistTab() {
             <p className="text-slate-500 font-light text-sm">Manage and verify checks for candidates.</p>
           </div>
           
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto print:hidden">
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
               <div className="relative flex-1 min-w-[150px] sm:min-w-[200px]">
                 <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -429,7 +405,7 @@ export default function ChecklistTab() {
           </div>
         </div>
 
-        <div id="checklist-table-container" className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden">
+        <div id="checklist-table-container" className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden print-page landscape print-scale-down">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>

@@ -67,3 +67,78 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  @page landscape {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  body {
+    background-color: white !important;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 210mm;
+    height: 297mm;
+    padding: 35mm 20mm 25mm 20mm; /* Top, Right, Bottom, Left - adjust for logos */
+    margin: 0;
+    background-image: url('/portrait-bg.jpg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-sizing: border-box;
+    page-break-after: always;
+    overflow: hidden; /* Ensure it fits in one page */
+    z-index: 9999; /* Ensure it's on top of everything else when printing */
+    background-color: white;
+  }
+
+  .print-page.landscape {
+    width: 297mm;
+    height: 210mm;
+    padding: 25mm 30mm 20mm 30mm;
+    background-image: url('/landscape-bg.jpg');
+    page: landscape;
+  }
+
+  /* Hide everything else when printing */
+  body * {
+    visibility: hidden;
+  }
+  
+  .print-page, .print-page * {
+    visibility: visible;
+  }
+
+  .print-content-fit {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Scale down content to fit if necessary */
+  .print-page.print-scale-down > * {
+    transform-origin: top left;
+    transform: scale(0.8);
+    width: 125%; /* 1 / 0.8 */
+    height: 125%;
+  }
+
+  ::-webkit-scrollbar {
+    display: none;
+  }
+}

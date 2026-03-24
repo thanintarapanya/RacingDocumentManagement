@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="2970" viewBox="0 0 2100 2970">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f8fafc" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#ea580c" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+  <rect width="2100" height="2970" fill="url(#bg)" />
+  <path d="M 0 0 L 2100 0 L 2100 200 L 0 400 Z" fill="url(#accent)" />
+  <path d="M 0 2970 L 2100 2970 L 2100 2770 L 0 2570 Z" fill="url(#accent)" />
+  <text x="1050" y="2850" font-family="sans-serif" font-size="24" fill="#94a3b8" text-anchor="middle" font-weight="300">24H SERIES - DUBAI 2026</text>
+</svg>

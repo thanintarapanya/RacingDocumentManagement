@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users, 
@@ -19,40 +20,141 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { useAppStore } from '@/lib/store';
-
-const data = [
-  { name: 'Mon', entries: 40, approved: 24 },
-  { name: 'Tue', entries: 30, approved: 13 },
-  { name: 'Wed', entries: 20, approved: 98 },
-  { name: 'Thu', entries: 27, approved: 39 },
-  { name: 'Fri', entries: 18, approved: 48 },
-  { name: 'Sat', entries: 23, approved: 38 },
-  { name: 'Sun', entries: 34, approved: 43 },
-];
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '@/firebase';
+import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 
 export default function DashboardTab() {
   const { entries } = useAppStore();
+  
+  const [requests, setRequests] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [inspections, setInspections] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsubRequests = onSnapshot(collection(db, 'requests'), (snapshot) => {
+      setRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'requests'));
+
+    const unsubReports = onSnapshot(collection(db, 'reports'), (snapshot) => {
+      setReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'reports'));
+
+    const unsubInspections = onSnapshot(collection(db, 'car_inspections'), (snapshot) => {
+      setInspections(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'car_inspections'));
+
+    return () => {
+      unsubRequests();
+      unsubReports();
+      unsubInspections();
+    };
+  }, []);
+
+  const activities = useMemo(() => {
+    const allActivities = [
+      ...entries.map(e => ({
+        text: `New entry submitted by ${e.nameEn || 'Unknown'}`,
+        time: new Date(e.createdAt || e.created || Date.now()).getTime(),
+        type: 'entry'
+      })),
+      ...inspections.map(i => ({
+        text: `Inspection created for Car #${i.carNumber}`,
+        time: new Date(i.createdAt || Date.now()).getTime(),
+        type: 'success'
+      })),
+      ...reports.map(r => ({
+        text: `Scrutineering report for ${r.stadium}`,
+        time: new Date(r.createdAt || Date.now()).getTime(),
+        type: r.failedCars?.length > 0 ? 'warning' : 'success'
+      })),
+      ...requests.map(r => ({
+        text: `Competitor request: ${r.status}`,
+        time: new Date(r.createdAt || Date.now()).getTime(),
+        type: 'info'
+      }))
+    ];
+
+    allActivities.sort((a, b) => b.time - a.time);
+    
+    const formattedActivities = allActivities.slice(0, 4).map(a => {
+      const diff = Date.now() - a.time;
+      const mins = Math.floor(diff / 60000);
+      const hours = Math.floor(mins / 60);
+      const days = Math.floor(hours / 24);
+      
+      let timeStr = 'Just now';
+      if (days > 0) timeStr = `${days} days ago`;
+      else if (hours > 0) timeStr = `${hours} hours ago`;
+      else if (mins > 0) timeStr = `${mins} mins ago`;
+
+      return { ...a, time: timeStr };
+    });
+
+    if (formattedActivities.length === 0) {
+      return [{ text: 'No recent activity', time: '', type: 'info' }];
+    }
+    return formattedActivities;
+  }, [entries, inspections, reports, requests]);
+
+  const chartData = useMemo(() => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const newData = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const nextD = new Date(d);
+      nextD.setDate(nextD.getDate() + 1);
+      
+      const dayName = days[d.getDay()];
+      
+      const dayEntries = entries.filter(e => {
+        const time = new Date(e.createdAt || e.created || Date.now()).getTime();
+        return time >= d.getTime() && time < nextD.getTime();
+      }).length;
+      
+      const dayApproved = requests.filter(r => {
+        const time = new Date(r.createdAt || Date.now()).getTime();
+        return r.status === 'Approved' && time >= d.getTime() && time < nextD.getTime();
+      }).length;
+      
+      newData.push({
+        name: dayName,
+        entries: dayEntries,
+        approved: dayApproved
+      });
+    }
+    
+    return newData;
+  }, [entries, requests]);
+
+  const approvedCount = requests.filter(r => r.status === 'Approved').length;
+  const pendingCount = requests.filter(r => r.status === 'Pending').length;
+  const issuesFoundCount = reports.reduce((acc, r) => acc + (r.failedCars?.length || 0), 0);
 
   const stats = [
     { title: 'Total Entries', value: entries.length.toString(), icon: Users, trend: '+12%', positive: true },
-    { title: 'Approved', value: '184', icon: CheckCircle, trend: '+5%', positive: true },
-    { title: 'Pending Review', value: '42', icon: Clock, trend: '-2%', positive: false },
-    { title: 'Issues Found', value: '12', icon: AlertTriangle, trend: '+1%', positive: false },
+    { title: 'Approved Requests', value: approvedCount.toString(), icon: CheckCircle, trend: '+5%', positive: true },
+    { title: 'Pending Requests', value: pendingCount.toString(), icon: Clock, trend: '-2%', positive: false },
+    { title: 'Issues Found', value: issuesFoundCount.toString(), icon: AlertTriangle, trend: '+1%', positive: false },
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="print-page print-scale-down portrait">
+    <div className="space-y-8 w-full h-full">
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-light tracking-tight text-slate-900 mb-2">Dashboard</h1>
           <p className="text-slate-500 font-light text-sm">Overview of 24H Series - Dubai 2026</p>
         </div>
-        <button className="px-4 py-2 bg-orange-500/20 text-orange-500 border border-orange-500/30 rounded-lg hover:bg-orange-500/30 transition-colors text-sm font-medium">
+        <button onClick={() => window.print()} className="px-4 py-2 bg-orange-500/20 text-orange-500 border border-orange-500/30 rounded-lg hover:bg-orange-500/30 transition-colors text-sm font-medium print:hidden">
           Export Report
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 print:grid-cols-4 gap-6">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.title}
@@ -76,17 +178,17 @@ export default function DashboardTab() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 print:grid-cols-3 gap-6">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, type: "spring", stiffness: 300, damping: 30 }}
-          className="glass-panel p-6 lg:col-span-2"
+          className="glass-panel p-6 lg:col-span-2 print:col-span-2"
         >
           <h3 className="text-lg font-medium text-slate-900 mb-6">Entry Submissions</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorEntries" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
@@ -119,12 +221,7 @@ export default function DashboardTab() {
         >
           <h3 className="text-lg font-medium text-slate-900 mb-6">Recent Activity</h3>
           <div className="space-y-6">
-            {[
-              { text: 'New entry submitted by Team Porsche', time: '10 mins ago', type: 'entry' },
-              { text: 'Scrutineering passed for Car #42', time: '1 hour ago', type: 'success' },
-              { text: 'Missing roll cage cert for Car #12', time: '2 hours ago', type: 'warning' },
-              { text: 'Competitor request: Number change', time: '3 hours ago', type: 'info' },
-            ].map((activity, i) => (
+            {activities.map((activity, i) => (
               <div key={i} className="flex items-start gap-4">
                 <div className={`w-2 h-2 mt-2 rounded-full flex-shrink-0 ${
                   activity.type === 'entry' ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]' :
@@ -141,6 +238,7 @@ export default function DashboardTab() {
           </div>
         </motion.div>
       </div>
+    </div>
     </div>
   );
 }

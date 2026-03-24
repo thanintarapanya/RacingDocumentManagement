@@ -664,9 +664,10 @@ export default function RequestTab() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="max-w-6xl mx-auto pb-12"
+          className="max-w-4xl mx-auto pb-12 print-page print-scale-down"
         >
-        <div className="mb-8 flex items-center justify-between print:hidden">
+        <div className="w-full h-full">
+        <div className="mb-8 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <button 
               onClick={() => {
@@ -674,7 +675,7 @@ export default function RequestTab() {
                 setViewMode(false);
                 setEditingId(null);
               }}
-              className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+              className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500 print:hidden"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -1079,6 +1080,7 @@ export default function RequestTab() {
               </div>
             </div>
           )}
+        </div>
         </div>
         </motion.div>
 

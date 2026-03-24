@@ -296,12 +296,13 @@ export default function EntryFormTab() {
 
   const handleExportPDF = () => {
     setIsExporting(true);
-    // Simulate PDF generation
     setTimeout(() => {
       setIsExporting(false);
       setShowExportModal(false);
-      alert(`Downloaded A4 PDF for Series: ${exportFilters.series} | Grade: ${exportFilters.grade}`);
-    }, 2000);
+      setTimeout(() => {
+        window.print();
+      }, 100);
+    }, 500);
   };
 
   // Render Helpers
@@ -404,7 +405,7 @@ export default function EntryFormTab() {
             <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-3">Entry Form</h1>
             <p className="text-slate-500 font-light text-sm">Manage and review competitor entry forms.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto print:hidden">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
@@ -450,7 +451,7 @@ export default function EntryFormTab() {
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden">
+        <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden print-page landscape print-scale-down">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
