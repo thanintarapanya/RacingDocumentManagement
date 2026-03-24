@@ -685,31 +685,31 @@ export default function RequestTab() {
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 mb-6 print:hidden">
+        <div className="flex flex-col lg:flex-row gap-6 mb-6">
           <button 
             onClick={() => window.print()}
-            className="px-5 py-2.5 bg-slate-500 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm flex items-center gap-2 w-fit"
+            className="px-5 py-2.5 bg-slate-500 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm flex items-center gap-2 w-fit print:hidden"
           >
             <Printer className="w-4 h-4" />
             Print PDF
           </button>
           
           <div className="flex-1 flex justify-end items-center gap-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 print:hidden">
               <span className="text-sm font-medium text-slate-700">Secretary Comment <span className="text-rose-500">*</span></span>
               <input 
                 type="text" 
                 placeholder="Please enter comment" 
                 value={newRequest.remark}
                 onChange={(e) => setNewRequest({...newRequest, remark: e.target.value})}
-                className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 w-64"
+                className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 w-64"
               />
             </div>
             <div className="flex items-center gap-2">
               <button 
                 onClick={handleApprove}
                 disabled={isSubmitting || newRequest.status === 'Cancelled'}
-                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center gap-2"
+                className="px-6 py-2.5 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center gap-2"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {newRequest.status === 'Approved' ? 'Update Request' : 'Approve Request'}
@@ -719,7 +719,7 @@ export default function RequestTab() {
                 <DropdownMenu.Trigger asChild>
                   <button 
                     disabled={isSubmitting}
-                    className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl transition-all shadow-sm disabled:opacity-70"
+                    className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl transition-all shadow-sm disabled:opacity-70 print:hidden"
                   >
                     <MoreVertical className="w-5 h-5" />
                   </button>
@@ -781,17 +781,17 @@ export default function RequestTab() {
         </div>
 
         {newRequest.status === 'Approved' ? (
-          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-6 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-emerald-500" />
             <span className="text-sm text-emerald-800 font-medium">Approved by Secretary</span>
           </div>
         ) : newRequest.status === 'Cancelled' ? (
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-slate-500" />
             <span className="text-sm text-slate-700 font-medium">Request Cancelled</span>
           </div>
         ) : (
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-6 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-amber-500" />
             <span className="text-sm text-amber-800 font-medium">Wait for approved by Secretary</span>
           </div>
@@ -802,7 +802,7 @@ export default function RequestTab() {
             <h2 className="text-lg font-medium text-slate-800">Request Info</h2>
           </div>
           <div className="p-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-8 gap-x-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 print:grid-cols-4 gap-y-8 gap-x-6">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">ID</div>
                 <div className="text-sm text-slate-900">{editingId}</div>
@@ -879,7 +879,7 @@ export default function RequestTab() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 print:grid-cols-2 gap-6">
           {/* Racer Card */}
           <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
             <div className="flex items-center justify-between mb-8">
@@ -889,11 +889,11 @@ export default function RequestTab() {
             <div className="grid grid-cols-2 gap-6 mb-auto">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
-                <div className="text-sm font-medium text-orange-500">{newRequest.driverName || '-'}</div>
+                <div className="text-sm font-medium text-blue-600">{newRequest.driverName || '-'}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
-                <div className="text-sm text-orange-500">-</div>
+                <div className="text-sm text-blue-600">-</div>
               </div>
             </div>
           </div>
@@ -907,15 +907,15 @@ export default function RequestTab() {
             <div className="grid grid-cols-2 gap-6 mb-6">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
-                <div className="text-sm text-orange-500">-</div>
+                <div className="text-sm text-blue-600">-</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
-                <div className="text-sm text-orange-500">-</div>
+                <div className="text-sm text-blue-600">-</div>
               </div>
             </div>
             <div className="mt-auto flex justify-end">
-              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+              <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
             </div>
@@ -930,11 +930,11 @@ export default function RequestTab() {
             <div className="grid grid-cols-2 gap-6 mb-6">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
-                <div className="text-sm text-orange-500">-</div>
+                <div className="text-sm text-blue-600">-</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
-                <div className="text-sm text-orange-500">-</div>
+                <div className="text-sm text-blue-600">-</div>
               </div>
             </div>
             <div className="mb-6">
@@ -942,30 +942,30 @@ export default function RequestTab() {
               <input 
                 type="text" 
                 placeholder="Comment" 
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50"
               />
             </div>
             <div className="mt-auto flex justify-end">
-              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+              <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
             </div>
           </div>
 
-          {/* Clerk of the Course Card */}
+          {/* Field Master Card */}
           <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-lg font-medium text-slate-800">Clerk of the Course</h3>
+              <h3 className="text-lg font-medium text-slate-800">Field Master</h3>
               <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-medium border border-amber-100">Waiting for approve</span>
             </div>
             <div className="grid grid-cols-2 gap-6 mb-6">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
-                <div className="text-sm text-orange-500">-</div>
+                <div className="text-sm text-blue-600">-</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
-                <div className="text-sm text-orange-500">-</div>
+                <div className="text-sm text-blue-600">-</div>
               </div>
             </div>
             <div className="mb-6">
@@ -973,11 +973,11 @@ export default function RequestTab() {
               <input 
                 type="text" 
                 placeholder="Comment" 
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50"
               />
             </div>
             <div className="mt-auto flex justify-end">
-              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+              <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
             </div>
@@ -1001,11 +1001,11 @@ export default function RequestTab() {
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
-                  <div className="text-sm text-orange-500">{newRequest.chairmanSignName || '-'}</div>
+                  <div className="text-sm text-blue-600">{newRequest.chairmanSignName || '-'}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
-                  <div className="text-sm text-orange-500">{newRequest.chairmanSignDate || '-'}</div>
+                  <div className="text-sm text-blue-600">{newRequest.chairmanSignDate || '-'}</div>
                 </div>
               </div>
               <div className="mb-6">
@@ -1015,14 +1015,14 @@ export default function RequestTab() {
                   placeholder="Comment" 
                   value={newRequest.chairmanComment || ''}
                   onChange={(e) => setNewRequest({ ...newRequest, chairmanComment: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50"
                   disabled={newRequest.chairmanStatus === 'Approved' || isSubmitting}
                 />
               </div>
               <div className="mt-auto flex justify-end">
                 <button 
                   onClick={handleChairmanApprove}
-                  className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
                   disabled={newRequest.chairmanStatus === 'Approved' || isSubmitting}
                 >
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -1050,11 +1050,11 @@ export default function RequestTab() {
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
-                  <div className="text-sm text-orange-500">{newRequest.stewardSignName || '-'}</div>
+                  <div className="text-sm text-blue-600">{newRequest.stewardSignName || '-'}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
-                  <div className="text-sm text-orange-500">{newRequest.stewardSignDate || '-'}</div>
+                  <div className="text-sm text-blue-600">{newRequest.stewardSignDate || '-'}</div>
                 </div>
               </div>
               <div className="mb-6">
@@ -1064,14 +1064,14 @@ export default function RequestTab() {
                   placeholder="Comment" 
                   value={newRequest.stewardComment || ''}
                   onChange={(e) => setNewRequest({ ...newRequest, stewardComment: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50"
                   disabled={newRequest.stewardStatus === 'Approved' || isSubmitting}
                 />
               </div>
               <div className="mt-auto flex justify-end">
                 <button 
                   onClick={handleStewardApprove}
-                  className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
                   disabled={newRequest.stewardStatus === 'Approved' || isSubmitting}
                 >
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
