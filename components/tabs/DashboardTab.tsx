@@ -55,7 +55,7 @@ export default function DashboardTab() {
     const allActivities = [
       ...entries.map(e => ({
         text: `New entry submitted by ${e.nameEn || 'Unknown'}`,
-        time: new Date(e.createdAt || e.created || Date.now()).getTime(),
+        time: new Date((e as any).createdAt || e.created || Date.now()).getTime(),
         type: 'entry'
       })),
       ...inspections.map(i => ({
@@ -111,7 +111,7 @@ export default function DashboardTab() {
       const dayName = days[d.getDay()];
       
       const dayEntries = entries.filter(e => {
-        const time = new Date(e.createdAt || e.created || Date.now()).getTime();
+        const time = new Date((e as any).createdAt || e.created || Date.now()).getTime();
         return time >= d.getTime() && time < nextD.getTime();
       }).length;
       
