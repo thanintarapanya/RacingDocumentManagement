@@ -10,17 +10,24 @@ import {
   Send, 
   CheckCircle2, 
   AlertCircle, 
-  Loader2 
+  Loader2,
+  Eye,
+  Edit,
+  Trash2,
+  Printer,
+  MoreVertical
 } from 'lucide-react';
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 interface RequestItem {
   id: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   createdAt?: string;
+  updatedAt?: string;
   userId?: string;
   
   // New fields
@@ -35,6 +42,19 @@ interface RequestItem {
   mobileNo?: string;
   requestPermissionTopic?: string;
   requestPermissionDetail?: string;
+  remark?: string;
+
+  // Additional Approvals
+  requireChairmanApproval?: boolean;
+  requireStewardApproval?: boolean;
+  chairmanStatus?: 'Pending' | 'Approved' | 'Rejected';
+  stewardStatus?: 'Pending' | 'Approved' | 'Rejected';
+  chairmanComment?: string;
+  chairmanSignName?: string;
+  chairmanSignDate?: string;
+  stewardComment?: string;
+  stewardSignName?: string;
+  stewardSignDate?: string;
 
   // Old fields for backward compatibility
   team?: string;
@@ -89,13 +109,28 @@ export default function RequestTab() {
     nameRequestPermission: '',
     mobileNo: '',
     requestPermissionTopic: '',
-    requestPermissionDetail: ''
+    requestPermissionDetail: '',
+    remark: '',
+    requireChairmanApproval: false,
+    requireStewardApproval: false,
+    chairmanStatus: 'Pending' as 'Pending' | 'Approved' | 'Rejected',
+    stewardStatus: 'Pending' as 'Pending' | 'Approved' | 'Rejected',
+    chairmanComment: '',
+    chairmanSignName: '',
+    chairmanSignDate: '',
+    stewardComment: '',
+    stewardSignName: '',
+    stewardSignDate: '',
+    status: 'Pending' as 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'
   };
   
   const [newRequest, setNewRequest] = useState(initialRequestState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<boolean>(false);
+  const [showApproveConfirm, setShowApproveConfirm] = useState<boolean>(false);
   
   // List View States
   const [search, setSearch] = useState('');
@@ -156,6 +191,8 @@ export default function RequestTab() {
         (req.carNumber || req.car || '')?.toLowerCase().includes(searchLower) ||
         (req.requestPermissionTopic || req.type || '')?.toLowerCase().includes(searchLower) ||
         (req.requestPermissionDetail || req.desc || '')?.toLowerCase().includes(searchLower) ||
+        (req.series || '')?.toLowerCase().includes(searchLower) ||
+        (req.remark || '')?.toLowerCase().includes(searchLower) ||
         req.id?.toLowerCase().includes(searchLower)
       );
     });
@@ -173,28 +210,256 @@ export default function RequestTab() {
     return filtered;
   }, [requests, search, sortConfig]);
 
-  const handleSubmit = async () => {
-    if (!auth.currentUser) return;
+  const handleApprove = () => {
+    setShowApproveConfirm(true);
+  };
+
+  const confirmApprove = async () => {
+    if (!auth.currentUser || !editingId) return;
     setIsSubmitting(true);
     
-    const newId = `REQ-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-    
     try {
-      await setDoc(doc(db, 'requests', newId), {
+      await updateDoc(doc(db, 'requests', editingId), {
         ...newRequest,
-        status: 'Pending',
-        userId: auth.currentUser.uid,
-        createdAt: new Date().toISOString(),
+        status: 'Approved',
         updatedAt: new Date().toISOString()
       });
       
       setNewRequest(initialRequestState);
       setCurrentStep(1);
+      setEditingId(null);
+      setViewMode(false);
+      setShowApproveConfirm(false);
       setActiveTab('inbox');
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'requests');
+      handleFirestoreError(error, OperationType.UPDATE, 'requests');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: 'Pending' | 'Cancelled') => {
+    if (!auth.currentUser || !editingId) return;
+    setIsSubmitting(true);
+    
+    try {
+      await updateDoc(doc(db, 'requests', editingId), {
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      });
+      
+      setNewRequest(prev => ({ ...prev, status: newStatus }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'requests');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleToggleApproval = async (type: 'chairman' | 'steward') => {
+    if (!auth.currentUser || !editingId) return;
+    setIsSubmitting(true);
+    
+    try {
+      const updates: any = {
+        updatedAt: new Date().toISOString()
+      };
+      
+      if (type === 'chairman') {
+        updates.requireChairmanApproval = !newRequest.requireChairmanApproval;
+        if (updates.requireChairmanApproval) updates.chairmanStatus = 'Pending';
+      } else {
+        updates.requireStewardApproval = !newRequest.requireStewardApproval;
+        if (updates.requireStewardApproval) updates.stewardStatus = 'Pending';
+      }
+      
+      await updateDoc(doc(db, 'requests', editingId), updates);
+      
+      setNewRequest(prev => ({ 
+        ...prev, 
+        ...updates
+      }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'requests');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleChairmanApprove = async () => {
+    if (!auth.currentUser || !editingId) return;
+    setIsSubmitting(true);
+    
+    try {
+      const updates = {
+        chairmanStatus: 'Approved',
+        chairmanSignName: auth.currentUser.displayName || auth.currentUser.email || 'Chairman',
+        chairmanSignDate: new Date().toISOString().split('T')[0],
+        chairmanComment: newRequest.chairmanComment || '',
+        updatedAt: new Date().toISOString()
+      };
+      
+      await updateDoc(doc(db, 'requests', editingId), updates);
+      
+      setNewRequest(prev => ({ 
+        ...prev, 
+        ...updates
+      } as any));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'requests');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleStewardApprove = async () => {
+    if (!auth.currentUser || !editingId) return;
+    setIsSubmitting(true);
+    
+    try {
+      const updates = {
+        stewardStatus: 'Approved',
+        stewardSignName: auth.currentUser.displayName || auth.currentUser.email || 'Steward',
+        stewardSignDate: new Date().toISOString().split('T')[0],
+        stewardComment: newRequest.stewardComment || '',
+        updatedAt: new Date().toISOString()
+      };
+      
+      await updateDoc(doc(db, 'requests', editingId), updates);
+      
+      setNewRequest(prev => ({ 
+        ...prev, 
+        ...updates
+      } as any));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'requests');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!auth.currentUser) return;
+    setIsSubmitting(true);
+    
+    try {
+      if (editingId) {
+        await updateDoc(doc(db, 'requests', editingId), {
+          ...newRequest,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        const newId = `REQ-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+        await setDoc(doc(db, 'requests', newId), {
+          ...newRequest,
+          status: 'Pending',
+          userId: auth.currentUser.uid,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      
+      setNewRequest(initialRequestState);
+      setCurrentStep(1);
+      setEditingId(null);
+      setViewMode(false);
+      setActiveTab('inbox');
+    } catch (error) {
+      handleFirestoreError(error, editingId ? OperationType.UPDATE : OperationType.CREATE, 'requests');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEdit = (req: RequestItem) => {
+    setNewRequest({
+      race: req.race || '',
+      circuit: req.circuit || '',
+      driverName: req.driverName || req.team || '',
+      carNumber: req.carNumber || req.car || '',
+      series: req.series || '',
+      licenseDriverNo: req.licenseDriverNo || '',
+      licenseTeamManagerNo: req.licenseTeamManagerNo || '',
+      nameRequestPermission: req.nameRequestPermission || '',
+      mobileNo: req.mobileNo || '',
+      requestPermissionTopic: req.requestPermissionTopic || req.type || '',
+      requestPermissionDetail: req.requestPermissionDetail || req.desc || '',
+      remark: req.remark || '',
+      requireChairmanApproval: req.requireChairmanApproval || false,
+      requireStewardApproval: req.requireStewardApproval || false,
+      chairmanStatus: req.chairmanStatus || 'Pending',
+      stewardStatus: req.stewardStatus || 'Pending',
+      chairmanComment: req.chairmanComment || '',
+      chairmanSignName: req.chairmanSignName || '',
+      chairmanSignDate: req.chairmanSignDate || '',
+      stewardComment: req.stewardComment || '',
+      stewardSignName: req.stewardSignName || '',
+      stewardSignDate: req.stewardSignDate || '',
+      status: req.status || 'Pending'
+    });
+    setEditingId(req.id);
+    setViewMode(false);
+    setCurrentStep(1);
+    setActiveTab('new');
+  };
+
+  const handleView = (req: RequestItem) => {
+    setNewRequest({
+      race: req.race || '',
+      circuit: req.circuit || '',
+      driverName: req.driverName || req.team || '',
+      carNumber: req.carNumber || req.car || '',
+      series: req.series || '',
+      licenseDriverNo: req.licenseDriverNo || '',
+      licenseTeamManagerNo: req.licenseTeamManagerNo || '',
+      nameRequestPermission: req.nameRequestPermission || '',
+      mobileNo: req.mobileNo || '',
+      requestPermissionTopic: req.requestPermissionTopic || req.type || '',
+      requestPermissionDetail: req.requestPermissionDetail || req.desc || '',
+      remark: req.remark || '',
+      requireChairmanApproval: req.requireChairmanApproval || false,
+      requireStewardApproval: req.requireStewardApproval || false,
+      chairmanStatus: req.chairmanStatus || 'Pending',
+      stewardStatus: req.stewardStatus || 'Pending',
+      chairmanComment: req.chairmanComment || '',
+      chairmanSignName: req.chairmanSignName || '',
+      chairmanSignDate: req.chairmanSignDate || '',
+      stewardComment: req.stewardComment || '',
+      stewardSignName: req.stewardSignName || '',
+      stewardSignDate: req.stewardSignDate || '',
+      status: req.status || 'Pending'
+    });
+    setEditingId(req.id);
+    setViewMode(true);
+    setCurrentStep(1);
+    setActiveTab('new');
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!auth.currentUser) return;
+    if (confirm('Are you sure you want to delete this request?')) {
+      try {
+        const itemToDelete = requests.find(r => r.id === id);
+        if (itemToDelete) {
+          const newDeletedItem = {
+            id: `DEL-REQ-${itemToDelete.id}`,
+            type: 'Competitor Request',
+            name: itemToDelete.driverName || itemToDelete.team || `Request #${itemToDelete.id}`,
+            deletedBy: auth.currentUser.displayName || auth.currentUser.email || 'Admin',
+            deletedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            expires: '7 days',
+            originalData: itemToDelete,
+            userId: auth.currentUser.uid
+          };
+          
+          const delRef = doc(db, 'deletedItems', newDeletedItem.id);
+          await setDoc(delRef, newDeletedItem);
+        }
+        
+        await deleteDoc(doc(db, 'requests', id));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'requests');
+      }
     }
   };
 
@@ -255,12 +520,13 @@ export default function RequestTab() {
               <table className="w-full text-left border-collapse min-w-[1000px]">
                 <thead>
                   <tr>
-                    <SortableHeader label="ID" sortKey="id" sortConfig={sortConfig} requestSort={requestSort} />
-                    <SortableHeader label="TEAM" sortKey="nameRequestPermission" sortConfig={sortConfig} requestSort={requestSort} />
-                    <SortableHeader label="CAR" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
-                    <SortableHeader label="TYPE" sortKey="requestPermissionTopic" sortConfig={sortConfig} requestSort={requestSort} />
-                    <SortableHeader label="DESCRIPTION" sortKey="requestPermissionDetail" sortConfig={sortConfig} requestSort={requestSort} />
-                    <SortableHeader label="DATE" sortKey="createdAt" sortConfig={sortConfig} requestSort={requestSort} />
+                    <SortableHeader label="CREATE" sortKey="createdAt" sortConfig={sortConfig} requestSort={requestSort} />
+                    <SortableHeader label="LASTUPDATE" sortKey="updatedAt" sortConfig={sortConfig} requestSort={requestSort} />
+                    <SortableHeader label="NO" sortKey="id" sortConfig={sortConfig} requestSort={requestSort} />
+                    <SortableHeader label="RACE SERIES" sortKey="series" sortConfig={sortConfig} requestSort={requestSort} />
+                    <SortableHeader label="CAR NUMBER" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                    <SortableHeader label="REQUEST TOPIC" sortKey="requestPermissionTopic" sortConfig={sortConfig} requestSort={requestSort} />
+                    <SortableHeader label="REMARK" sortKey="remark" sortConfig={sortConfig} requestSort={requestSort} />
                     <SortableHeader label="STATUS" sortKey="status" sortConfig={sortConfig} requestSort={requestSort} />
                     <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-right">ACTIONS</th>
                   </tr>
@@ -269,7 +535,7 @@ export default function RequestTab() {
                   <AnimatePresence>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={8} className="px-6 py-12 text-center">
+                        <td colSpan={9} className="px-6 py-12 text-center">
                           <Loader2 className="w-8 h-8 animate-spin text-orange-500 mx-auto" />
                         </td>
                       </tr>
@@ -285,57 +551,71 @@ export default function RequestTab() {
                       >
                         <td className="px-6 py-5 relative">
                           <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          <span className="text-sm text-slate-900 font-medium">{req.id}</span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className="text-sm text-slate-600 font-light">{req.nameRequestPermission || req.team || req.driverName}</span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className="text-sm text-slate-600 font-light">{req.carNumber || req.car}</span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className="text-sm text-slate-600 font-light">{req.requestPermissionTopic || req.type}</span>
-                        </td>
-                        <td className="px-6 py-5 max-w-[200px] truncate">
-                          <span className="text-sm text-slate-600 font-light">{req.requestPermissionDetail || req.desc}</span>
+                          <span className="text-sm text-slate-600 font-light">
+                            {req.createdAt ? new Date(req.createdAt).toLocaleString() : req.date}
+                          </span>
                         </td>
                         <td className="px-6 py-5">
                           <span className="text-sm text-slate-600 font-light">
-                            {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : req.date}
+                            {req.updatedAt ? new Date(req.updatedAt).toLocaleString() : '-'}
                           </span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-900 font-medium">{req.id}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">{req.series || '-'}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">{req.carNumber || req.car || '-'}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">
+                            {(req.requestPermissionTopic || req.type) === 'อื่นๆ' || (req.requestPermissionTopic || req.type) === 'Others' 
+                              ? (req.requestPermissionDetail || req.desc || 'อื่นๆ')
+                              : (req.requestPermissionTopic || req.type || '-')}
+                          </span>
+                        </td>
+                        <td className="px-6 py-5 max-w-[200px] truncate">
+                          <span className="text-sm text-slate-600 font-light">{req.remark || '-'}</span>
                         </td>
                         <td className="px-6 py-5">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium uppercase tracking-wider ${
                             req.status === 'Pending' ? 'bg-amber-50 text-amber-600 border border-amber-200' : 
                             req.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 
+                            req.status === 'Cancelled' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
                             'bg-rose-50 text-rose-600 border border-rose-200'
                           }`}>
                             {req.status}
                           </span>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          {req.status === 'Pending' && (
-                            <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button 
-                                onClick={() => handleStatusUpdate(req.id, 'Approved')}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors text-xs font-medium"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                              </button>
-                              <button 
-                                onClick={() => handleStatusUpdate(req.id, 'Rejected')}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors text-xs font-medium"
-                              >
-                                <AlertCircle className="w-3.5 h-3.5" /> Reject
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => handleView(req)}
+                              className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                            >
+                              View
+                            </button>
+                            <button 
+                              onClick={() => handleEdit(req)}
+                              className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(req.id)}
+                              className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </motion.tr>
                     ))}
                     {!isLoading && sortedAndFilteredRequests.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-light">
+                        <td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-light">
                           No requests found.
                         </td>
                       </tr>
@@ -371,6 +651,482 @@ export default function RequestTab() {
             </div>
           </div>
         </motion.div>
+      </>
+    );
+  }
+
+  if (activeTab === 'new' && viewMode) {
+    return (
+      <>
+        <motion.div 
+          key="view-mode"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="max-w-6xl mx-auto pb-12"
+        >
+        <div className="mb-8 flex items-center justify-between print:hidden">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => {
+                setActiveTab('inbox');
+                setViewMode(false);
+                setEditingId(null);
+              }}
+              className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-3xl font-light tracking-tight text-slate-900">
+              Competitor Request Form : {editingId}
+            </h1>
+          </div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row gap-6 mb-6 print:hidden">
+          <button 
+            onClick={() => window.print()}
+            className="px-5 py-2.5 bg-slate-500 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm flex items-center gap-2 w-fit"
+          >
+            <Printer className="w-4 h-4" />
+            Print PDF
+          </button>
+          
+          <div className="flex-1 flex justify-end items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-700">Secretary Comment <span className="text-rose-500">*</span></span>
+              <input 
+                type="text" 
+                placeholder="Please enter comment" 
+                value={newRequest.remark}
+                onChange={(e) => setNewRequest({...newRequest, remark: e.target.value})}
+                className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 w-64"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleApprove}
+                disabled={isSubmitting || newRequest.status === 'Cancelled'}
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center gap-2"
+              >
+                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {newRequest.status === 'Approved' ? 'Update Request' : 'Approve Request'}
+              </button>
+              
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button 
+                    disabled={isSubmitting}
+                    className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl transition-all shadow-sm disabled:opacity-70"
+                  >
+                    <MoreVertical className="w-5 h-5" />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content 
+                    align="end"
+                    className="min-w-[220px] bg-white rounded-xl shadow-lg border border-slate-100 p-1 z-50 animate-in fade-in zoom-in-95"
+                  >
+                    {newRequest.status === 'Approved' && (
+                      <DropdownMenu.Item 
+                        onClick={() => handleStatusChange('Pending')}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-amber-600 hover:bg-amber-50 rounded-lg cursor-pointer outline-none transition-colors"
+                      >
+                        Unapprove Request
+                      </DropdownMenu.Item>
+                    )}
+                    
+                    {newRequest.status !== 'Cancelled' && (
+                      <DropdownMenu.Item 
+                        onClick={() => handleStatusChange('Cancelled')}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer outline-none transition-colors"
+                      >
+                        Cancel Request
+                      </DropdownMenu.Item>
+                    )}
+
+                    {newRequest.status === 'Cancelled' && (
+                      <DropdownMenu.Item 
+                        onClick={() => handleStatusChange('Pending')}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer outline-none transition-colors"
+                      >
+                        Restore Request
+                      </DropdownMenu.Item>
+                    )}
+
+                    <DropdownMenu.Separator className="h-px bg-slate-100 my-1" />
+                    
+                    <DropdownMenu.Item 
+                      onClick={() => handleToggleApproval('chairman')}
+                      className="flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer outline-none transition-colors"
+                    >
+                      <span>Request Chairman Approval</span>
+                      {newRequest.requireChairmanApproval && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                    </DropdownMenu.Item>
+                    
+                    <DropdownMenu.Item 
+                      onClick={() => handleToggleApproval('steward')}
+                      className="flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer outline-none transition-colors"
+                    >
+                      <span>Request Steward Approval</span>
+                      {newRequest.requireStewardApproval && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </div>
+          </div>
+        </div>
+
+        {newRequest.status === 'Approved' ? (
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
+            <AlertCircle className="w-5 h-5 text-emerald-500" />
+            <span className="text-sm text-emerald-800 font-medium">Approved by Secretary</span>
+          </div>
+        ) : newRequest.status === 'Cancelled' ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
+            <AlertCircle className="w-5 h-5 text-slate-500" />
+            <span className="text-sm text-slate-700 font-medium">Request Cancelled</span>
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
+            <AlertCircle className="w-5 h-5 text-amber-500" />
+            <span className="text-sm text-amber-800 font-medium">Wait for approved by Secretary</span>
+          </div>
+        )}
+
+        <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden mb-6">
+          <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="text-lg font-medium text-slate-800">Request Info</h2>
+          </div>
+          <div className="p-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-8 gap-x-6">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">ID</div>
+                <div className="text-sm text-slate-900">{editingId}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Create Date</div>
+                <div className="text-sm text-slate-900">-</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Update Date</div>
+                <div className="text-sm text-slate-900">-</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Stadium Number</div>
+                <div className="text-sm text-slate-900">-</div>
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Photo</div>
+                <div className="text-sm text-slate-900">-</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Stadium Name</div>
+                <div className="text-sm text-slate-900">{newRequest.circuit || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Racer Name</div>
+                <div className="text-sm text-slate-900">{newRequest.driverName || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Racing Car Number</div>
+                <div className="text-sm text-slate-900">{newRequest.carNumber || '-'}</div>
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Model</div>
+                <div className="text-sm text-slate-900">{newRequest.series || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Race Ticket Number</div>
+                <div className="text-sm text-slate-900">-</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Team Collector Number</div>
+                <div className="text-sm text-slate-900">-</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Permit Applicant Name</div>
+                <div className="text-sm text-slate-900">{newRequest.nameRequestPermission || '-'}</div>
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Phone</div>
+                <div className="text-sm text-slate-900">{newRequest.mobileNo || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Subject Topic</div>
+                <div className="text-sm text-slate-900">{newRequest.requestPermissionTopic || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Subject Detail</div>
+                <div className="text-sm text-slate-900">{newRequest.requestPermissionDetail || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Chairman</div>
+                <div className="text-sm text-slate-900">-</div>
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Date of Finepaid</div>
+                <div className="text-sm text-slate-900">-</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Racer Card */}
+          <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-lg font-medium text-slate-800">Racer</h3>
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-medium border border-emerald-100">Approved</span>
+            </div>
+            <div className="grid grid-cols-2 gap-6 mb-auto">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
+                <div className="text-sm font-medium text-orange-500">{newRequest.driverName || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
+                <div className="text-sm text-orange-500">-</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Team Manager Card */}
+          <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-lg font-medium text-slate-800">Team Manager</h3>
+              <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-medium border border-amber-100">Waiting for approve</span>
+            </div>
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
+                <div className="text-sm text-orange-500">-</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
+                <div className="text-sm text-orange-500">-</div>
+              </div>
+            </div>
+            <div className="mt-auto flex justify-end">
+              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+                Approve
+              </button>
+            </div>
+          </div>
+
+          {/* Chief Inspection Card */}
+          <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-lg font-medium text-slate-800">Chief Inspection</h3>
+              <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-medium border border-amber-100">Waiting for approve</span>
+            </div>
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
+                <div className="text-sm text-orange-500">-</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
+                <div className="text-sm text-orange-500">-</div>
+              </div>
+            </div>
+            <div className="mb-6">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Comment</div>
+              <input 
+                type="text" 
+                placeholder="Comment" 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50"
+              />
+            </div>
+            <div className="mt-auto flex justify-end">
+              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+                Approve
+              </button>
+            </div>
+          </div>
+
+          {/* Clerk of the Course Card */}
+          <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-lg font-medium text-slate-800">Clerk of the Course</h3>
+              <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-medium border border-amber-100">Waiting for approve</span>
+            </div>
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
+                <div className="text-sm text-orange-500">-</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
+                <div className="text-sm text-orange-500">-</div>
+              </div>
+            </div>
+            <div className="mb-6">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Comment</div>
+              <input 
+                type="text" 
+                placeholder="Comment" 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50"
+              />
+            </div>
+            <div className="mt-auto flex justify-end">
+              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+                Approve
+              </button>
+            </div>
+          </div>
+
+          {/* Chairman Card */}
+          {newRequest.requireChairmanApproval && (
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-lg font-medium text-slate-800">Chairman</h3>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                  newRequest.chairmanStatus === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                  newRequest.chairmanStatus === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                  'bg-amber-50 text-amber-600 border-amber-100'
+                }`}>
+                  {newRequest.chairmanStatus === 'Approved' ? 'Approved' : 
+                   newRequest.chairmanStatus === 'Rejected' ? 'Rejected' : 
+                   'Waiting for approve'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
+                  <div className="text-sm text-orange-500">{newRequest.chairmanSignName || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
+                  <div className="text-sm text-orange-500">{newRequest.chairmanSignDate || '-'}</div>
+                </div>
+              </div>
+              <div className="mb-6">
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Comment</div>
+                <input 
+                  type="text" 
+                  placeholder="Comment" 
+                  value={newRequest.chairmanComment || ''}
+                  onChange={(e) => setNewRequest({ ...newRequest, chairmanComment: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50"
+                  disabled={newRequest.chairmanStatus === 'Approved' || isSubmitting}
+                />
+              </div>
+              <div className="mt-auto flex justify-end">
+                <button 
+                  onClick={handleChairmanApprove}
+                  className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  disabled={newRequest.chairmanStatus === 'Approved' || isSubmitting}
+                >
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {newRequest.chairmanStatus === 'Approved' ? 'Approved' : 'Approve'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Steward Card */}
+          {newRequest.requireStewardApproval && (
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-lg font-medium text-slate-800">Steward</h3>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                  newRequest.stewardStatus === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                  newRequest.stewardStatus === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                  'bg-amber-50 text-amber-600 border-amber-100'
+                }`}>
+                  {newRequest.stewardStatus === 'Approved' ? 'Approved' : 
+                   newRequest.stewardStatus === 'Rejected' ? 'Rejected' : 
+                   'Waiting for approve'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
+                  <div className="text-sm text-orange-500">{newRequest.stewardSignName || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
+                  <div className="text-sm text-orange-500">{newRequest.stewardSignDate || '-'}</div>
+                </div>
+              </div>
+              <div className="mb-6">
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Comment</div>
+                <input 
+                  type="text" 
+                  placeholder="Comment" 
+                  value={newRequest.stewardComment || ''}
+                  onChange={(e) => setNewRequest({ ...newRequest, stewardComment: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50"
+                  disabled={newRequest.stewardStatus === 'Approved' || isSubmitting}
+                />
+              </div>
+              <div className="mt-auto flex justify-end">
+                <button 
+                  onClick={handleStewardApprove}
+                  className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  disabled={newRequest.stewardStatus === 'Approved' || isSubmitting}
+                >
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {newRequest.stewardStatus === 'Approved' ? 'Approved' : 'Approve'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        </motion.div>
+
+        <AnimatePresence>
+          {showApproveConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-3xl shadow-xl border border-slate-100 p-8 max-w-md w-full"
+              >
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                    <AlertCircle className="w-6 h-6 text-orange-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-medium text-slate-800">Confirm Action</h3>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Are you sure you want to {newRequest.status === 'Approved' ? 'update' : 'approve'} this request?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-3 mt-8">
+                  <button
+                    onClick={() => setShowApproveConfirm(false)}
+                    className="px-6 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmApprove}
+                    disabled={isSubmitting}
+                    className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center gap-2"
+                  >
+                    {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Confirm
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </>
     );
   }
@@ -450,6 +1206,7 @@ export default function RequestTab() {
                         onChange={(e) => setNewRequest({...newRequest, race: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
                         placeholder="Race"
+                        disabled={viewMode}
                       />
                     </div>
                     <div className="space-y-2">
@@ -459,6 +1216,7 @@ export default function RequestTab() {
                           value={newRequest.circuit}
                           onChange={(e) => setNewRequest({...newRequest, circuit: e.target.value})}
                           className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
+                          disabled={viewMode}
                         >
                           <option value="" disabled></option>
                           <option value="Chang International Circuit">Chang International Circuit</option>
@@ -482,6 +1240,7 @@ export default function RequestTab() {
                         value={newRequest.driverName}
                         onChange={(e) => setNewRequest({...newRequest, driverName: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        disabled={viewMode}
                       />
                     </div>
                     <div className="space-y-2">
@@ -492,6 +1251,7 @@ export default function RequestTab() {
                         value={newRequest.carNumber}
                         onChange={(e) => setNewRequest({...newRequest, carNumber: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        disabled={viewMode}
                       />
                     </div>
                     <div className="space-y-2">
@@ -501,6 +1261,7 @@ export default function RequestTab() {
                           value={newRequest.series}
                           onChange={(e) => setNewRequest({...newRequest, series: e.target.value})}
                           className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
+                          disabled={viewMode}
                         >
                           <option value="" disabled></option>
                           <option value="SIAM GT">SIAM GT</option>
@@ -523,6 +1284,7 @@ export default function RequestTab() {
                         value={newRequest.licenseDriverNo}
                         onChange={(e) => setNewRequest({...newRequest, licenseDriverNo: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        disabled={viewMode}
                       />
                     </div>
                     <div className="space-y-2">
@@ -533,6 +1295,7 @@ export default function RequestTab() {
                         value={newRequest.licenseTeamManagerNo}
                         onChange={(e) => setNewRequest({...newRequest, licenseTeamManagerNo: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        disabled={viewMode}
                       />
                     </div>
                   </div>
@@ -550,6 +1313,7 @@ export default function RequestTab() {
                         value={newRequest.nameRequestPermission}
                         onChange={(e) => setNewRequest({...newRequest, nameRequestPermission: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        disabled={viewMode}
                       />
                     </div>
                     <div className="space-y-2">
@@ -560,6 +1324,7 @@ export default function RequestTab() {
                         value={newRequest.mobileNo}
                         onChange={(e) => setNewRequest({...newRequest, mobileNo: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                        disabled={viewMode}
                       />
                     </div>
                   </div>
@@ -571,6 +1336,7 @@ export default function RequestTab() {
                           value={newRequest.requestPermissionTopic}
                           onChange={(e) => setNewRequest({...newRequest, requestPermissionTopic: e.target.value})}
                           className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
+                          disabled={viewMode}
                         >
                           <option value="" disabled></option>
                           <option value="เปลี่ยนเครื่องยนต์">เปลี่ยนเครื่องยนต์</option>
@@ -602,6 +1368,19 @@ export default function RequestTab() {
                         value={newRequest.requestPermissionDetail}
                         onChange={(e) => setNewRequest({...newRequest, requestPermissionDetail: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all resize-none placeholder:text-slate-300"
+                        disabled={viewMode}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Remark</label>
+                      <textarea 
+                        rows={2}
+                        placeholder="Enter any additional remarks..."
+                        value={newRequest.remark}
+                        onChange={(e) => setNewRequest({...newRequest, remark: e.target.value})}
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all resize-none placeholder:text-slate-300"
+                        disabled={viewMode}
                       />
                     </div>
                   </div>
@@ -670,14 +1449,16 @@ export default function RequestTab() {
                 >
                   Back
                 </button>
-                <button 
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="px-8 py-2.5 bg-[#FF6B00] hover:bg-[#e66000] text-white rounded-xl text-sm font-medium transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70"
-                >
-                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Submit Request
-                </button>
+                {!viewMode && (
+                  <button 
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="px-8 py-2.5 bg-[#FF6B00] hover:bg-[#e66000] text-white rounded-xl text-sm font-medium transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70"
+                  >
+                    {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Submit Request
+                  </button>
+                )}
               </>
             )}
           </div>

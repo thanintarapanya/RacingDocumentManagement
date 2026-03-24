@@ -97,16 +97,59 @@ service cloud.firestore {
              data.userId is string && data.createdAt is string && data.updatedAt is string;
     }
 
-    function isValidReport(data) {
+    function isOldReportFormat(data) {
       return hasRequiredFields(['team', 'car', 'className', 'status', 'userId', 'createdAt', 'updatedAt']) &&
              data.team is string && data.car is string && data.className is string && data.status is string &&
              data.userId is string && data.createdAt is string && data.updatedAt is string;
     }
 
-    function isValidRequest(data) {
+    function isNewReportFormat(data) {
+      return hasRequiredFields(['stadium', 'reportSession', 'race', 'series', 'grades', 'status', 'passedCars', 'failedCars', 'userId', 'createdAt', 'updatedAt']) &&
+             data.stadium is string &&
+             data.reportSession is string &&
+             data.race is string &&
+             data.series is string &&
+             data.grades is string &&
+             data.status is string &&
+             data.passedCars is list &&
+             data.failedCars is list &&
+             data.userId is string &&
+             data.createdAt is string &&
+             data.updatedAt is string;
+    }
+
+    function isValidReport(data) {
+      return isOldReportFormat(data) || isNewReportFormat(data);
+    }
+
+    function isOldRequestFormat(data) {
       return hasRequiredFields(['type', 'team', 'car', 'status', 'date', 'userId', 'createdAt', 'updatedAt']) &&
              data.type is string && data.team is string && data.car is string && data.status is string && data.date is string &&
              data.userId is string && data.createdAt is string && data.updatedAt is string;
+    }
+
+    function isNewRequestFormat(data) {
+      return hasRequiredFields(['race', 'circuit', 'driverName', 'carNumber', 'series', 'licenseDriverNo', 'licenseTeamManagerNo', 'nameRequestPermission', 'mobileNo', 'requestPermissionTopic', 'requestPermissionDetail', 'status', 'userId', 'createdAt', 'updatedAt']) &&
+             data.race is string &&
+             data.circuit is string &&
+             data.driverName is string &&
+             data.carNumber is string &&
+             data.series is string &&
+             data.licenseDriverNo is string &&
+             data.licenseTeamManagerNo is string &&
+             data.nameRequestPermission is string &&
+             data.mobileNo is string &&
+             data.requestPermissionTopic is string &&
+             data.requestPermissionDetail is string &&
+             (!('remark' in data) || data.remark is string) &&
+             data.status is string &&
+             data.userId is string &&
+             data.createdAt is string &&
+             data.updatedAt is string;
+    }
+
+    function isValidRequest(data) {
+      return isOldRequestFormat(data) || isNewRequestFormat(data);
     }
 
     // ===============================================================

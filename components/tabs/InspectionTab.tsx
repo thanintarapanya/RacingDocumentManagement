@@ -320,8 +320,26 @@ export default function InspectionTab() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!auth.currentUser) return;
     if (confirm('Are you sure you want to delete this inspection?')) {
       try {
+        const itemToDelete = inspections.find(i => i.id === id);
+        if (itemToDelete) {
+          const newDeletedItem = {
+            id: `DEL-INSP-${itemToDelete.id}`,
+            type: 'Inspection Form',
+            name: itemToDelete.racerName || `Inspection #${itemToDelete.id}`,
+            deletedBy: auth.currentUser.displayName || auth.currentUser.email || 'Admin',
+            deletedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            expires: '7 days',
+            originalData: itemToDelete,
+            userId: auth.currentUser.uid
+          };
+          
+          const delRef = doc(db, 'deletedItems', newDeletedItem.id);
+          await setDoc(delRef, newDeletedItem);
+        }
+        
         await deleteDoc(doc(db, 'car_inspections', id));
         showToast('Inspection deleted successfully');
       } catch (error) {

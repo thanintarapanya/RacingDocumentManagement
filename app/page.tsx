@@ -62,13 +62,13 @@ export default function Home() {
   if (!isMounted) return null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50/50">
+    <div className="flex h-screen overflow-hidden bg-slate-50/50 print:h-auto print:overflow-visible print:bg-white">
       {/* Sidebar */}
       <motion.aside 
         initial={false}
         animate={{ width: isSidebarOpen ? 240 : 80 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="glass-panel m-4 mr-2 flex flex-col overflow-hidden border-r border-slate-200 relative z-10"
+        className="glass-panel m-4 mr-2 flex flex-col overflow-hidden border-r border-slate-200 relative z-10 print:hidden"
       >
         <div className="p-6 flex items-center justify-between border-b border-slate-200">
           <AnimatePresence>
@@ -164,9 +164,9 @@ export default function Home() {
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden m-4 ml-2 relative z-10">
+      <main className="flex-1 flex flex-col overflow-hidden m-4 ml-2 relative z-10 print:m-0 print:overflow-visible">
         {/* Topbar */}
-        <header className="glass-panel mb-4 h-16 flex items-center justify-between px-6 flex-shrink-0">
+        <header className="glass-panel mb-4 h-16 flex items-center justify-between px-6 flex-shrink-0 print:hidden">
           <div className="flex items-center gap-4 flex-1">
             <div className="relative w-full max-w-md">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -187,7 +187,7 @@ export default function Home() {
         </header>
 
         {/* Tab Content Area */}
-        <div className="flex-1 overflow-y-auto glass-panel p-8 relative">
+        <div className="flex-1 overflow-y-auto glass-panel p-8 relative print:overflow-visible print:p-0 print:border-none print:shadow-none print:bg-white">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}

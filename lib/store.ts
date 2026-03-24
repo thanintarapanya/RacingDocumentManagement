@@ -146,6 +146,24 @@ export const useAppStore = create<AppState>((set, get) => ({
           updatedAt: new Date().toISOString(),
           formData: JSON.stringify(itemToRestore.originalData.formData || {})
         });
+      } else if (itemToRestore.type === 'Inspection Form' && itemToRestore.originalData) {
+        const ref = doc(db, 'car_inspections', itemToRestore.originalData.id);
+        await setDoc(ref, {
+          ...itemToRestore.originalData,
+          updatedAt: new Date().toISOString()
+        });
+      } else if (itemToRestore.type === 'Scrutineering Report' && itemToRestore.originalData) {
+        const ref = doc(db, 'reports', itemToRestore.originalData.id);
+        await setDoc(ref, {
+          ...itemToRestore.originalData,
+          updatedAt: new Date().toISOString()
+        });
+      } else if (itemToRestore.type === 'Competitor Request' && itemToRestore.originalData) {
+        const ref = doc(db, 'requests', itemToRestore.originalData.id);
+        await setDoc(ref, {
+          ...itemToRestore.originalData,
+          updatedAt: new Date().toISOString()
+        });
       }
       
       const delRef = doc(db, 'deletedItems', id);

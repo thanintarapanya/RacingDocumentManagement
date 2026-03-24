@@ -146,11 +146,18 @@
         "status": { "type": "string" },
         "weight": { "type": "string" },
         "restrictor": { "type": "string" },
+        "stadium": { "type": "string" },
+        "reportSession": { "type": "string" },
+        "race": { "type": "string" },
+        "series": { "type": "string" },
+        "grades": { "type": "string" },
+        "passedCars": { "type": "array" },
+        "failedCars": { "type": "array" },
         "userId": { "type": "string" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       },
-      "required": ["team", "car", "className", "status", "userId", "createdAt", "updatedAt"]
+      "required": ["status", "userId", "createdAt", "updatedAt"]
     },
     "Request": {
       "title": "Request",
@@ -163,11 +170,23 @@
         "status": { "type": "string" },
         "date": { "type": "string" },
         "description": { "type": "string" },
+        "race": { "type": "string" },
+        "circuit": { "type": "string" },
+        "driverName": { "type": "string" },
+        "carNumber": { "type": "string" },
+        "series": { "type": "string" },
+        "licenseDriverNo": { "type": "string" },
+        "licenseTeamManagerNo": { "type": "string" },
+        "nameRequestPermission": { "type": "string" },
+        "mobileNo": { "type": "string" },
+        "requestPermissionTopic": { "type": "string" },
+        "requestPermissionDetail": { "type": "string" },
+        "remark": { "type": "string" },
         "userId": { "type": "string" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       },
-      "required": ["type", "team", "car", "status", "date", "userId", "createdAt", "updatedAt"]
+      "required": ["status", "userId", "createdAt", "updatedAt"]
     }
   },
   "firestore": {

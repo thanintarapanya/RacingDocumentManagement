@@ -91,6 +91,7 @@ export default function ReportTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState(false);
   
   // Form Wizard States
   const [currentStep, setCurrentStep] = useState(1);
@@ -191,17 +192,53 @@ export default function ReportTab() {
       failedCars: report.failedCars || [],
     });
     setEditingId(report.id);
+    setViewMode(false);
+    setCurrentStep(1);
+    setView('form');
+  };
+
+  const handleView = (report: Report) => {
+    setFormData({
+      stadium: report.stadium || '',
+      reportSession: report.reportSession || '',
+      race: report.race || '',
+      series: report.series || '',
+      grades: report.grades || '',
+      passedCars: report.passedCars || [],
+      failedCars: report.failedCars || [],
+    });
+    setEditingId(report.id);
+    setViewMode(true);
     setCurrentStep(1);
     setView('form');
   };
 
   const handleDelete = async (id: string) => {
     if (!auth.currentUser) return;
-    try {
-      await deleteDoc(doc(db, 'reports', id));
-      showToast('Report deleted successfully');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `reports/${id}`);
+    if (confirm('Are you sure you want to delete this report?')) {
+      try {
+        const itemToDelete = reports.find(r => r.id === id);
+        if (itemToDelete) {
+          const newDeletedItem = {
+            id: `DEL-RPT-${itemToDelete.id}`,
+            type: 'Scrutineering Report',
+            name: itemToDelete.stadium || `Report #${itemToDelete.id}`,
+            deletedBy: auth.currentUser.displayName || auth.currentUser.email || 'Admin',
+            deletedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            expires: '7 days',
+            originalData: itemToDelete,
+            userId: auth.currentUser.uid
+          };
+          
+          const delRef = doc(db, 'deletedItems', newDeletedItem.id);
+          await setDoc(delRef, newDeletedItem);
+        }
+        
+        await deleteDoc(doc(db, 'reports', id));
+        showToast('Report deleted successfully');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `reports/${id}`);
+      }
     }
   };
 
@@ -297,6 +334,7 @@ export default function ReportTab() {
         onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
         placeholder={`Enter ${label.toLowerCase()}`}
+        disabled={viewMode}
       />
     </div>
   );
@@ -309,6 +347,7 @@ export default function ReportTab() {
           value={formData[field] as string}
           onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
           className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
+          disabled={viewMode}
         >
           <option value="">Select {label}</option>
           {options.map(opt => (
@@ -424,12 +463,12 @@ export default function ReportTab() {
                         <td className="px-6 py-5 relative">
                           <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                           <span className="text-sm text-slate-900 font-medium">
-                            {new Date(item.createdAt).toLocaleDateString()}
+                            {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '-'}
                           </span>
                         </td>
                         <td className="px-6 py-5">
                           <span className="text-sm text-slate-600 font-light">
-                            {new Date(item.updatedAt).toLocaleDateString()}
+                            {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : '-'}
                           </span>
                         </td>
                         <td className="px-6 py-5">
@@ -453,6 +492,12 @@ export default function ReportTab() {
                         </td>
                         <td className="px-6 py-5 text-right">
                           <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => handleView(item)}
+                              className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                            >
+                              View
+                            </button>
                             <button 
                               onClick={() => handleEdit(item)}
                               className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
@@ -613,12 +658,14 @@ export default function ReportTab() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium text-slate-700">The following cars have pass post-qualify scrutineering</h3>
-                      <button 
-                        onClick={addPassedCar}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
+                      {!viewMode && (
+                        <button 
+                          onClick={addPassedCar}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                     
                     {formData.passedCars.length > 0 && (
@@ -638,6 +685,7 @@ export default function ReportTab() {
                             onChange={(e) => updatePassedCar(index, 'carNumber', e.target.value)}
                             placeholder="Car Number"
                             className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                            disabled={viewMode}
                           />
                           <input
                             type="text"
@@ -645,13 +693,16 @@ export default function ReportTab() {
                             onChange={(e) => updatePassedCar(index, 'remark', e.target.value)}
                             placeholder="Remark"
                             className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                            disabled={viewMode}
                           />
-                          <button 
-                            onClick={() => removePassedCar(index)}
-                            className="w-12 h-[46px] shrink-0 flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
+                          {!viewMode && (
+                            <button 
+                              onClick={() => removePassedCar(index)}
+                              className="w-12 h-[46px] shrink-0 flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       ))}
                       {formData.passedCars.length === 0 && (
@@ -666,12 +717,14 @@ export default function ReportTab() {
                   <div className="space-y-4 pt-6 border-t border-slate-100">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium text-slate-700">The following cars have not pass post-qualify scrutineering for the reason stated</h3>
-                      <button 
-                        onClick={addFailedCar}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
+                      {!viewMode && (
+                        <button 
+                          onClick={addFailedCar}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
 
                     {formData.failedCars.length > 0 && (
@@ -691,6 +744,7 @@ export default function ReportTab() {
                             onChange={(e) => updateFailedCar(index, 'carNumber', e.target.value)}
                             placeholder="Car Number"
                             className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                            disabled={viewMode}
                           />
                           <input
                             type="text"
@@ -698,13 +752,16 @@ export default function ReportTab() {
                             onChange={(e) => updateFailedCar(index, 'reason', e.target.value)}
                             placeholder="Reason"
                             className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+                            disabled={viewMode}
                           />
-                          <button 
-                            onClick={() => removeFailedCar(index)}
-                            className="w-12 h-[46px] shrink-0 flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
+                          {!viewMode && (
+                            <button 
+                              onClick={() => removeFailedCar(index)}
+                              className="w-12 h-[46px] shrink-0 flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       ))}
                       {formData.failedCars.length === 0 && (
@@ -736,17 +793,19 @@ export default function ReportTab() {
                 Next
               </button>
             ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="px-8 py-2.5 text-sm font-medium text-white bg-orange-500 rounded-xl hover:bg-orange-600 transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
-                ) : (
-                  <><Save className="w-4 h-4" /> Submit</>
-                )}
-              </button>
+              !viewMode && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="px-8 py-2.5 text-sm font-medium text-white bg-orange-500 rounded-xl hover:bg-orange-600 transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
+                  ) : (
+                    <><Save className="w-4 h-4" /> Submit</>
+                  )}
+                </button>
+              )
             )}
           </div>
         </div>
