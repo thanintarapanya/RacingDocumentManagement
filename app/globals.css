@@ -94,8 +94,10 @@ body {
     padding: 35mm 20mm 25mm 20mm; /* Top, Right, Bottom, Left - adjust for logos */
     margin: 0;
     box-sizing: border-box;
-    background-color: transparent;
-    z-index: 9999;
+    background-color: transparent !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    z-index: 1; /* Create stacking context */
   }
 
   /* Fixed background for all printed pages */
@@ -104,38 +106,40 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background-size: 100% 100%;
-    background-position: center;
-    background-repeat: no-repeat;
+    width: 100vw;
+    height: 100vh;
+    background-image: url('/portrait-bg.jpg') !important;
+    background-size: 100% 100% !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
     z-index: -1;
-  }
-
-  @media (orientation: portrait) {
-    .print-page::before {
-      background-image: url('/portrait-bg.jpg');
-    }
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   @media (orientation: landscape) {
     .print-page::before {
-      background-image: url('/landscape-bg.jpg');
+      background-image: url('/landscape-bg.jpg') !important;
     }
-    .print-page {
-      min-height: 210mm;
-      padding: 25mm 30mm 20mm 30mm;
-    }
+  }
+
+  .print-page.landscape::before {
+    background-image: url('/landscape-bg.jpg') !important;
+  }
+
+  /* Make cards transparent so background shows through */
+  .print-page.bg-white,
+  .print-page .bg-white,
+  .print-page .bg-slate-50\/50 {
+    background-color: transparent !important;
+    border-color: rgba(0,0,0,0.1) !important;
+    box-shadow: none !important;
   }
 
   .print-page.landscape {
     min-height: 210mm;
     padding: 25mm 30mm 20mm 30mm;
     page: landscape;
-  }
-
-  .print-page.landscape::before {
-    background-image: url('/landscape-bg.jpg');
   }
 
   .print-content-fit {
