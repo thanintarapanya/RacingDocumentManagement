@@ -106,6 +106,29 @@ body {
     page-break-inside: avoid;
   }
 
+  /* Pseudo-element for Base64 Background Image */
+  .print-page::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1 !important; /* Ensure background is at the bottom */
+    /* Replace the URL below with your actual Base64 string for Portrait */
+    background-image: url('data:image/jpeg;base64,ใส่_BASE64_STRING_แนวตั้ง_ของคุณที่นี่') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-page.landscape::before {
+    /* Replace the URL below with your actual Base64 string for Landscape */
+    background-image: url('data:image/jpeg;base64,ใส่_BASE64_STRING_แนวนอน_ของคุณที่นี่') !important;
+  }
+
   /* Compact layout for print to fit everything in one page */
   .print-page .p-6 { padding: 1rem !important; }
   .print-page .p-8 { padding: 1.25rem !important; }
