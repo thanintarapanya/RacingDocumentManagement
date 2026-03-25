@@ -44,6 +44,8 @@ interface RequestItem {
   requestPermissionTopic?: string;
   requestPermissionDetail?: string;
   remark?: string;
+  secretarySignName?: string;
+  secretarySignDate?: string;
 
   // Additional Approvals
   requireChairmanApproval?: boolean;
@@ -112,6 +114,8 @@ export default function RequestTab() {
     requestPermissionTopic: '',
     requestPermissionDetail: '',
     remark: '',
+    secretarySignName: '',
+    secretarySignDate: '',
     requireChairmanApproval: false,
     requireStewardApproval: false,
     chairmanStatus: 'Pending' as 'Pending' | 'Approved' | 'Rejected',
@@ -224,10 +228,15 @@ export default function RequestTab() {
     setIsSubmitting(true);
     
     try {
+      const now = new Date().toISOString();
+      const signName = auth.currentUser.displayName || auth.currentUser.email || 'Secretary';
+
       await updateDoc(doc(db, 'requests', editingId), {
         ...newRequest,
         status: 'Approved',
-        updatedAt: new Date().toISOString()
+        secretarySignName: signName,
+        secretarySignDate: now,
+        updatedAt: now
       });
       
       setNewRequest(initialRequestState);
@@ -248,12 +257,23 @@ export default function RequestTab() {
     setIsSubmitting(true);
     
     try {
-      await updateDoc(doc(db, 'requests', editingId), {
+      const now = new Date().toISOString();
+      const updates: any = {
         status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
+        updatedAt: now
+      };
+
+      if (newStatus === 'Cancelled') {
+        updates.secretarySignName = auth.currentUser.displayName || auth.currentUser.email || 'Secretary';
+        updates.secretarySignDate = now;
+      } else if (newStatus === 'Pending') {
+        updates.secretarySignName = '';
+        updates.secretarySignDate = '';
+      }
+
+      await updateDoc(doc(db, 'requests', editingId), updates);
       
-      setNewRequest(prev => ({ ...prev, status: newStatus }));
+      setNewRequest(prev => ({ ...prev, ...updates }));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'requests');
     } finally {
@@ -722,7 +742,7 @@ export default function RequestTab() {
               <button 
                 onClick={handleApprove}
                 disabled={isSubmitting || newRequest.status === 'Cancelled'}
-                className="px-6 py-2.5 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center gap-2"
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center gap-2"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {newRequest.status === 'Approved' ? 'Update Request' : 'Approve Request'}
@@ -807,6 +827,39 @@ export default function RequestTab() {
           <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
             <AlertCircle className="w-5 h-5 text-amber-500" />
             <span className="text-sm text-amber-800 font-medium">Wait for approved by Secretary</span>
+          </div>
+        )}
+
+        {(newRequest.status === 'Approved' || newRequest.status === 'Cancelled') && (
+          <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col mb-6">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-lg font-medium text-slate-800">Secretary</h3>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                newRequest.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
+              }`}>
+                {newRequest.status === 'Approved' ? 'Approved' : 'Cancelled'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
+                <div className="text-sm font-medium text-blue-600">{newRequest.secretarySignName || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
+                <div className="text-sm text-blue-600">
+                  {newRequest.secretarySignDate ? new Date(newRequest.secretarySignDate).toLocaleString('en-GB', {
+                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                  }) : '-'}
+                </div>
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Comment</div>
+              <div className="text-sm text-slate-900 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 min-h-[44px]">
+                {newRequest.remark || '-'}
+              </div>
+            </div>
           </div>
         )}
 
@@ -928,7 +981,7 @@ export default function RequestTab() {
               </div>
             </div>
             <div className="mt-auto flex justify-end print:hidden">
-              <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
             </div>
@@ -959,16 +1012,16 @@ export default function RequestTab() {
               />
             </div>
             <div className="mt-auto flex justify-end print:hidden">
-              <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
             </div>
           </div>
 
-          {/* Field Master Card */}
+          {/* Clerk of the Course Card */}
           <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-lg font-medium text-slate-800">Field Master</h3>
+              <h3 className="text-lg font-medium text-slate-800">Clerk of the Course</h3>
               <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-medium border border-amber-100">Waiting for approve</span>
             </div>
             <div className="grid grid-cols-2 gap-6 mb-6">
@@ -990,7 +1043,7 @@ export default function RequestTab() {
               />
             </div>
             <div className="mt-auto flex justify-end print:hidden">
-              <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
+              <button className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
             </div>
@@ -1035,7 +1088,7 @@ export default function RequestTab() {
               <div className="mt-auto flex justify-end print:hidden">
                 <button 
                   onClick={handleChairmanApprove}
-                  className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
                   disabled={newRequest.chairmanStatus === 'Approved' || isSubmitting}
                 >
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -1084,7 +1137,7 @@ export default function RequestTab() {
               <div className="mt-auto flex justify-end print:hidden">
                 <button 
                   onClick={handleStewardApprove}
-                  className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
                   disabled={newRequest.stewardStatus === 'Approved' || isSubmitting}
                 >
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
