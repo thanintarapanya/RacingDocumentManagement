@@ -406,8 +406,9 @@ export default function ChecklistTab() {
         </div>
 
         <div id="checklist-table-container" className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden print-page landscape print-scale-down">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
+          <div className="print-content-wrapper">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr>
                   <th data-html2canvas-ignore className="px-6 py-5 border-b border-slate-100 w-16">
@@ -511,6 +512,7 @@ export default function ChecklistTab() {
                 )}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       </motion.div>

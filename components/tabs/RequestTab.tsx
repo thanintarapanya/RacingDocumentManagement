@@ -666,7 +666,7 @@ export default function RequestTab() {
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
           className="max-w-4xl mx-auto pb-12 print-page print-scale-down"
         >
-        <div className="w-full h-full">
+        <div className="w-full h-full print-content-wrapper">
         <div className="mb-8 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <button 

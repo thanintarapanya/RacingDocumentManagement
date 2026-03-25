@@ -452,8 +452,9 @@ export default function EntryFormTab() {
         </div>
 
         <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden print-page landscape print-scale-down">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
+          <div className="print-content-wrapper">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr>
                   <SortableHeader label="Created" sortKey="created" sortConfig={sortConfig} requestSort={requestSort} />
@@ -531,6 +532,7 @@ export default function EntryFormTab() {
                 </AnimatePresence>
               </tbody>
             </table>
+          </div>
           </div>
         </div>
 

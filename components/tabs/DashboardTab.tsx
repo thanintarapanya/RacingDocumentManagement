@@ -143,7 +143,7 @@ export default function DashboardTab() {
 
   return (
     <div className="print-page print-scale-down portrait">
-    <div className="space-y-8 w-full h-full">
+    <div className="space-y-8 w-full h-full print-content-wrapper">
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-light tracking-tight text-slate-900 mb-2">Dashboard</h1>
