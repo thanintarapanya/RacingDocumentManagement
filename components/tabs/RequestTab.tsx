@@ -142,24 +142,41 @@ export default function RequestTab() {
 
   const handlePrintPDF = async () => {
     try {
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = html2pdfModule.default || html2pdfModule;
       const element = document.getElementById('print-content');
       if (!element) return;
 
+      // 1. Add class to show the background image
       element.classList.add('pdf-exporting');
 
+      // 2. Wait for the background image to fully load
+      const bgImage = element.querySelector('img[alt="PDF Background"]') as HTMLImageElement;
+      if (bgImage && !bgImage.complete) {
+        await new Promise((resolve, reject) => {
+          bgImage.onload = resolve;
+          bgImage.onerror = () => reject(new Error('Failed to load background image'));
+          // Timeout after 5 seconds to prevent freezing
+          setTimeout(() => reject(new Error('Image load timeout')), 5000);
+        });
+      }
+
+      // 3. Import html2pdf dynamically
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+
+      // 4. Configure options (optimize memory with scale 1.5 and quality 0.85)
       const opt = {
         margin:       0,
         filename:     `Request_${editingId || 'New'}.pdf`,
-        image:        { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        image:        { type: 'jpeg' as const, quality: 0.85 },
+        html2canvas:  { scale: 1.5, useCORS: true, logging: false },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
       };
 
+      // 5. Generate and save PDF
       await html2pdf().set(opt).from(element).save();
     } catch (error) {
       console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
     } finally {
       const element = document.getElementById('print-content');
       if (element) {
@@ -700,10 +717,10 @@ export default function RequestTab() {
         <img 
           src={`data:image/jpeg;base64,${PORTRAIT_BG}`} 
           alt="PDF Background" 
-          className="hidden pdf-exporting:block absolute top-0 left-0 w-full h-full object-cover z-[-1]"
+          className="hidden pdf-exporting:block absolute top-0 left-0 w-full h-full object-cover z-0"
           style={{ width: '210mm', height: '297mm' }}
         />
-        <div className="w-full h-full print-content-wrapper">
+        <div className="w-full h-full relative z-10 print-content-wrapper">
         <div className="mb-8 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-6">
             <button 
