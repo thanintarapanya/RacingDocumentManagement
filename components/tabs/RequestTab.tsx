@@ -420,6 +420,8 @@ export default function RequestTab() {
       stewardComment: req.stewardComment || '',
       stewardSignName: req.stewardSignName || '',
       stewardSignDate: req.stewardSignDate || '',
+      secretarySignName: req.secretarySignName || '',
+      secretarySignDate: req.secretarySignDate || '',
       status: req.status || 'Pending'
     });
     setEditingId(req.id);
@@ -452,6 +454,8 @@ export default function RequestTab() {
       stewardComment: req.stewardComment || '',
       stewardSignName: req.stewardSignName || '',
       stewardSignDate: req.stewardSignDate || '',
+      secretarySignName: req.secretarySignName || '',
+      secretarySignDate: req.secretarySignDate || '',
       status: req.status || 'Pending'
     });
     setEditingId(req.id);
