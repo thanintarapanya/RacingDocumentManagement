@@ -22,7 +22,7 @@ import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc, deleteD
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { PORTRAIT_BG } from '@/lib/base64-bg';
+import PrintTemplate from '../PrintTemplate';
 
 interface RequestItem {
   id: string;
@@ -138,15 +138,27 @@ export default function RequestTab() {
   const [sortConfig, setSortConfig] = useState<{ key: keyof RequestItem, direction: 'asc' | 'desc' } | null>(null);
   const [recordsPerPage, setRecordsPerPage] = useState(20);
 
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
   const entries = useAppStore((state) => state.entries);
 
   const handlePrintPDF = async () => {
+    if (isGeneratingPDF) return;
+    setIsGeneratingPDF(true);
+    
     try {
-      const element = document.getElementById('print-content');
+      const element = document.getElementById('pdf-template-wrapper');
       if (!element) return;
 
-      // 1. Add class to show the background image
-      element.classList.add('pdf-exporting');
+      // 1. Ensure the element is rendered but behind everything
+      element.style.position = 'fixed';
+      element.style.left = '0';
+      element.style.top = '0';
+      element.style.zIndex = '-9999';
+      element.style.display = 'block';
+
+      // Allow browser to render the element
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // 2. Wait for the background image to fully load
       const bgImage = element.querySelector('img[alt="PDF Background"]') as HTMLImageElement;
@@ -163,11 +175,11 @@ export default function RequestTab() {
       const html2pdfModule = await import('html2pdf.js');
       const html2pdf = html2pdfModule.default || html2pdfModule;
 
-      // 4. Configure options (optimize memory with scale 1.5 and quality 0.85)
+      // 4. Configure options (optimize memory with scale 1.5 for ~150 DPI)
       const opt = {
         margin:       0,
         filename:     `Request_${editingId || 'New'}.pdf`,
-        image:        { type: 'jpeg' as const, quality: 0.85 },
+        image:        { type: 'jpeg' as const, quality: 0.95 },
         html2canvas:  { scale: 1.5, useCORS: true, logging: false },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
       };
@@ -178,10 +190,11 @@ export default function RequestTab() {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Please try again.');
     } finally {
-      const element = document.getElementById('print-content');
+      const element = document.getElementById('pdf-template-wrapper');
       if (element) {
-        element.classList.remove('pdf-exporting');
+        element.style.display = 'none';
       }
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -704,6 +717,9 @@ export default function RequestTab() {
   if (activeTab === 'new' && viewMode) {
     return (
       <>
+        <div id="pdf-template-wrapper" style={{ display: 'none', width: '210mm', height: '297mm' }}>
+          <PrintTemplate data={newRequest} />
+        </div>
         <motion.div 
           key="view-mode"
           id="print-content"
@@ -713,13 +729,6 @@ export default function RequestTab() {
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
           className="max-w-4xl mx-auto pb-12 print-page print-scale-down relative"
         >
-        {/* PDF Background Image (Only visible during PDF export) */}
-        <img 
-          src={`data:image/jpeg;base64,${PORTRAIT_BG}`} 
-          alt="PDF Background" 
-          className="hidden pdf-exporting:block absolute top-0 left-0 w-full h-full object-cover z-0"
-          style={{ width: '210mm', height: '297mm' }}
-        />
         <div className="w-full h-full relative z-10 print-content-wrapper">
         <div className="mb-8 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-6">
@@ -742,10 +751,20 @@ export default function RequestTab() {
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           <button 
             onClick={handlePrintPDF}
-            className="px-5 py-2.5 bg-slate-500 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm flex items-center gap-2 w-fit print:hidden"
+            disabled={isGeneratingPDF}
+            className="px-5 py-2.5 bg-slate-500 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition-all shadow-sm flex items-center gap-2 w-fit print:hidden"
           >
-            <Printer className="w-4 h-4" />
-            Print PDF
+            {isGeneratingPDF ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Printer className="w-4 h-4" />
+                Print PDF
+              </>
+            )}
           </button>
           
           <div className="flex-1 flex justify-end items-center gap-4 print:hidden">
