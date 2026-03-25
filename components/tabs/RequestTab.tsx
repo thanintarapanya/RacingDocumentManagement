@@ -22,6 +22,7 @@ import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc, deleteD
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { PORTRAIT_BG } from '@/lib/base64-bg';
 
 interface RequestItem {
   id: string;
@@ -138,6 +139,34 @@ export default function RequestTab() {
   const [recordsPerPage, setRecordsPerPage] = useState(20);
 
   const entries = useAppStore((state) => state.entries);
+
+  const handlePrintPDF = async () => {
+    try {
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+      const element = document.getElementById('print-content');
+      if (!element) return;
+
+      element.classList.add('pdf-exporting');
+
+      const opt = {
+        margin:       0,
+        filename:     `Request_${editingId || 'New'}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      await html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      const element = document.getElementById('print-content');
+      if (element) {
+        element.classList.remove('pdf-exporting');
+      }
+    }
+  };
 
   useEffect(() => {
     if (newRequest.series && newRequest.carNumber) {
@@ -660,12 +689,20 @@ export default function RequestTab() {
       <>
         <motion.div 
           key="view-mode"
+          id="print-content"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="max-w-4xl mx-auto pb-12 print-page print-scale-down"
+          className="max-w-4xl mx-auto pb-12 print-page print-scale-down relative"
         >
+        {/* PDF Background Image (Only visible during PDF export) */}
+        <img 
+          src={`data:image/jpeg;base64,${PORTRAIT_BG}`} 
+          alt="PDF Background" 
+          className="hidden pdf-exporting:block absolute top-0 left-0 w-full h-full object-cover z-[-1]"
+          style={{ width: '210mm', height: '297mm' }}
+        />
         <div className="w-full h-full print-content-wrapper">
         <div className="mb-8 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-6">
@@ -687,7 +724,7 @@ export default function RequestTab() {
 
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           <button 
-            onClick={() => window.print()}
+            onClick={handlePrintPDF}
             className="px-5 py-2.5 bg-slate-500 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm flex items-center gap-2 w-fit print:hidden"
           >
             <Printer className="w-4 h-4" />

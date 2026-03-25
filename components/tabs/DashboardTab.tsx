@@ -51,11 +51,15 @@ export default function DashboardTab() {
     };
   }, []);
 
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<number>(0);
 
   useEffect(() => {
+    const timeout = setTimeout(() => setNow(Date.now()), 0);
     const interval = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, []);
 
   const activities = useMemo(() => {
@@ -102,7 +106,7 @@ export default function DashboardTab() {
       return [{ text: 'No recent activity', time: '', type: 'info' }];
     }
     return formattedActivities;
-  }, [entries, inspections, reports, requests]);
+  }, [entries, inspections, reports, requests, now]);
 
   const chartData = useMemo(() => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -135,7 +139,7 @@ export default function DashboardTab() {
     }
     
     return newData;
-  }, [entries, requests]);
+  }, [entries, requests, now]);
 
   const approvedCount = requests.filter(r => r.status === 'Approved').length;
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
