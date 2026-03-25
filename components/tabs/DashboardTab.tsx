@@ -51,26 +51,33 @@ export default function DashboardTab() {
     };
   }, []);
 
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const activities = useMemo(() => {
     const allActivities = [
       ...entries.map(e => ({
         text: `New entry submitted by ${e.nameEn || 'Unknown'}`,
-        time: new Date((e as any).createdAt || e.created || Date.now()).getTime(),
+        time: new Date((e as any).createdAt || e.created || now).getTime(),
         type: 'entry'
       })),
       ...inspections.map(i => ({
         text: `Inspection created for Car #${i.carNumber}`,
-        time: new Date(i.createdAt || Date.now()).getTime(),
+        time: new Date(i.createdAt || now).getTime(),
         type: 'success'
       })),
       ...reports.map(r => ({
         text: `Scrutineering report for ${r.stadium}`,
-        time: new Date(r.createdAt || Date.now()).getTime(),
+        time: new Date(r.createdAt || now).getTime(),
         type: r.failedCars?.length > 0 ? 'warning' : 'success'
       })),
       ...requests.map(r => ({
         text: `Competitor request: ${r.status}`,
-        time: new Date(r.createdAt || Date.now()).getTime(),
+        time: new Date(r.createdAt || now).getTime(),
         type: 'info'
       }))
     ];
@@ -78,7 +85,7 @@ export default function DashboardTab() {
     allActivities.sort((a, b) => b.time - a.time);
     
     const formattedActivities = allActivities.slice(0, 4).map(a => {
-      const diff = Date.now() - a.time;
+      const diff = now - a.time;
       const mins = Math.floor(diff / 60000);
       const hours = Math.floor(mins / 60);
       const days = Math.floor(hours / 24);
@@ -102,7 +109,7 @@ export default function DashboardTab() {
     const newData = [];
     
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
+      const d = new Date(now);
       d.setDate(d.getDate() - i);
       d.setHours(0, 0, 0, 0);
       const nextD = new Date(d);
@@ -111,12 +118,12 @@ export default function DashboardTab() {
       const dayName = days[d.getDay()];
       
       const dayEntries = entries.filter(e => {
-        const time = new Date((e as any).createdAt || e.created || Date.now()).getTime();
+        const time = new Date((e as any).createdAt || e.created || now).getTime();
         return time >= d.getTime() && time < nextD.getTime();
       }).length;
       
       const dayApproved = requests.filter(r => {
-        const time = new Date(r.createdAt || Date.now()).getTime();
+        const time = new Date(r.createdAt || now).getTime();
         return r.status === 'Approved' && time >= d.getTime() && time < nextD.getTime();
       }).length;
       

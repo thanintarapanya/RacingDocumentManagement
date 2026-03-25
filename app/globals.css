@@ -93,7 +93,7 @@ body {
     height: 297mm;
     max-height: 297mm;
     min-height: 297mm;
-    padding: 35mm 20mm 25mm 20mm; /* Top, Right, Bottom, Left - adjust for logos */
+    padding: 45mm 20mm 35mm 20mm; /* Adjusted for Header/Footer */
     margin: 0;
     box-sizing: border-box;
     background-color: transparent !important;
@@ -105,6 +105,17 @@ body {
     page-break-before: avoid;
     page-break-inside: avoid;
   }
+
+  /* Compact layout for print to fit everything in one page */
+  .print-page .p-6 { padding: 1rem !important; }
+  .print-page .p-8 { padding: 1.25rem !important; }
+  .print-page .mb-8 { margin-bottom: 1rem !important; }
+  .print-page .mb-6 { margin-bottom: 0.75rem !important; }
+  .print-page .gap-6 { gap: 1rem !important; }
+  .print-page .gap-y-8 { row-gap: 1rem !important; }
+  .print-page .text-lg { font-size: 1rem !important; }
+  .print-page .text-sm { font-size: 0.8rem !important; }
+  .print-page .text-\[10px\] { font-size: 0.6rem !important; }
 
   .print-portrait-only {
     display: block !important;

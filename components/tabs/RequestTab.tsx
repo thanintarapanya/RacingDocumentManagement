@@ -667,7 +667,7 @@ export default function RequestTab() {
           className="max-w-4xl mx-auto pb-12 print-page print-scale-down"
         >
         <div className="w-full h-full print-content-wrapper">
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-6">
             <button 
               onClick={() => {
@@ -694,8 +694,8 @@ export default function RequestTab() {
             Print PDF
           </button>
           
-          <div className="flex-1 flex justify-end items-center gap-4">
-            <div className="flex items-center gap-2 print:hidden">
+          <div className="flex-1 flex justify-end items-center gap-4 print:hidden">
+            <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-slate-700">Secretary Comment <span className="text-rose-500">*</span></span>
               <input 
                 type="text" 
@@ -781,17 +781,17 @@ export default function RequestTab() {
         </div>
 
         {newRequest.status === 'Approved' ? (
-          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-6 flex items-center gap-3">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
             <AlertCircle className="w-5 h-5 text-emerald-500" />
             <span className="text-sm text-emerald-800 font-medium">Approved by Secretary</span>
           </div>
         ) : newRequest.status === 'Cancelled' ? (
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
             <AlertCircle className="w-5 h-5 text-slate-500" />
             <span className="text-sm text-slate-700 font-medium">Request Cancelled</span>
           </div>
         ) : (
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-6 flex items-center gap-3">
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-6 flex items-center gap-3 print:hidden">
             <AlertCircle className="w-5 h-5 text-amber-500" />
             <span className="text-sm text-amber-800 font-medium">Wait for approved by Secretary</span>
           </div>
@@ -914,7 +914,7 @@ export default function RequestTab() {
                 <div className="text-sm text-blue-600">-</div>
               </div>
             </div>
-            <div className="mt-auto flex justify-end">
+            <div className="mt-auto flex justify-end print:hidden">
               <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
@@ -942,10 +942,10 @@ export default function RequestTab() {
               <input 
                 type="text" 
                 placeholder="Comment" 
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 print:border-none print:bg-transparent print:p-0 print:h-auto print:placeholder-transparent"
               />
             </div>
-            <div className="mt-auto flex justify-end">
+            <div className="mt-auto flex justify-end print:hidden">
               <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
@@ -973,10 +973,10 @@ export default function RequestTab() {
               <input 
                 type="text" 
                 placeholder="Comment" 
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 print:border-none print:bg-transparent print:p-0 print:h-auto print:placeholder-transparent"
               />
             </div>
-            <div className="mt-auto flex justify-end">
+            <div className="mt-auto flex justify-end print:hidden">
               <button className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm">
                 Approve
               </button>
@@ -1015,11 +1015,11 @@ export default function RequestTab() {
                   placeholder="Comment" 
                   value={newRequest.chairmanComment || ''}
                   onChange={(e) => setNewRequest({ ...newRequest, chairmanComment: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 print:border-none print:bg-transparent print:p-0 print:h-auto print:placeholder-transparent"
                   disabled={newRequest.chairmanStatus === 'Approved' || isSubmitting}
                 />
               </div>
-              <div className="mt-auto flex justify-end">
+              <div className="mt-auto flex justify-end print:hidden">
                 <button 
                   onClick={handleChairmanApprove}
                   className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
@@ -1064,11 +1064,11 @@ export default function RequestTab() {
                   placeholder="Comment" 
                   value={newRequest.stewardComment || ''}
                   onChange={(e) => setNewRequest({ ...newRequest, stewardComment: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 print:border-none print:bg-transparent print:p-0 print:h-auto print:placeholder-transparent"
                   disabled={newRequest.stewardStatus === 'Approved' || isSubmitting}
                 />
               </div>
-              <div className="mt-auto flex justify-end">
+              <div className="mt-auto flex justify-end print:hidden">
                 <button 
                   onClick={handleStewardApprove}
                   className="px-6 py-2 bg-[#1864c2] hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
