@@ -106,11 +106,26 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: url('/portrait-bg.svg');
     background-size: 100% 100%;
     background-position: center;
     background-repeat: no-repeat;
     z-index: -1;
+  }
+
+  @media (orientation: portrait) {
+    .print-page::before {
+      background-image: url('/portrait-bg.jpg');
+    }
+  }
+
+  @media (orientation: landscape) {
+    .print-page::before {
+      background-image: url('/landscape-bg.jpg');
+    }
+    .print-page {
+      min-height: 210mm;
+      padding: 25mm 30mm 20mm 30mm;
+    }
   }
 
   .print-page.landscape {
@@ -120,7 +135,7 @@ body {
   }
 
   .print-page.landscape::before {
-    background-image: url('/landscape-bg.svg');
+    background-image: url('/landscape-bg.jpg');
   }
 
   .print-content-fit {
