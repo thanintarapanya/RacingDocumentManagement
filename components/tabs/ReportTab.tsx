@@ -372,6 +372,15 @@ export default function ReportTab() {
                 : 'bg-white border-slate-200 hover:border-orange-200'
             }`}
           >
+            <input 
+              type="radio" 
+              name={field} 
+              value={opt} 
+              checked={formData[field] === opt} 
+              onChange={(e) => setFormData({ ...formData, [field]: e.target.value })} 
+              className="hidden" 
+              disabled={viewMode}
+            />
             <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
               formData[field] === opt ? 'border-orange-500' : 'border-slate-300'
             }`}>
