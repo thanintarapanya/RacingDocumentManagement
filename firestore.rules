@@ -17,11 +17,23 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.email == "info@embeddedlinuxgroup.com" && request.auth.token.email_verified == true;
+    }
+
+    function hasRole(roles) {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() in roles) ||
+        isSuperAdmin()
+      );
+    }
+
     function isAdmin() {
-      return isAuthenticated() &&
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         (request.auth.token.email == "info@embeddedlinuxgroup.com" && request.auth.token.email_verified == true));
+      return hasRole(['admin']);
     }
 
     function uidUnchanged() {
@@ -63,7 +75,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return hasRequiredFields(['email', 'role', 'createdAt']) &&
              data.email is string && isValidEmail(data.email) &&
-             data.role in ['admin', 'user'] &&
+             data.role in ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'steward', 'competitor', 'user'] &&
              data.createdAt is string;
     }
 
@@ -158,9 +170,9 @@ service cloud.firestore {
     
     match /entries/{entryId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidEntry(request.resource.data) && uidUnchanged();
-      allow update: if isAuthenticated() && isValidEntry(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if hasRole(['admin', 'secretary', 'competitor', 'user']) && isValidEntry(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidEntry(request.resource.data) && uidNotModified() && (isDocOwner() || hasRole(['admin', 'secretary', 'head_scrutineer', 'scrutineer_staff'])) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if hasRole(['admin', 'secretary']) || (isDocOwner() && hasRole(['competitor', 'user']));
     }
 
     match /deletedItems/{itemId} {
@@ -171,52 +183,52 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == 'user') || isAdmin());
-      allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin() || isSuperAdmin());
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role in ['user', 'competitor']) || isAdmin() || isSuperAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin() || isSuperAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin() || isSuperAdmin();
     }
 
     match /checklists/{checklistId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidChecklist(request.resource.data) && isAdmin();
-      allow update: if isAuthenticated() && isValidChecklist(request.resource.data) && isAdmin();
-      allow delete: if isAdmin();
+      allow create: if hasRole(['admin', 'secretary']) && isValidChecklist(request.resource.data);
+      allow update: if hasRole(['admin', 'secretary']) && isValidChecklist(request.resource.data);
+      allow delete: if hasRole(['admin', 'secretary']);
     }
 
     match /settings/{settingId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidSettings(request.resource.data) && isAdmin();
-      allow update: if isAuthenticated() && isValidSettings(request.resource.data) && isAdmin();
+      allow create: if isAdmin() && isValidSettings(request.resource.data);
+      allow update: if isAdmin() && isValidSettings(request.resource.data);
       allow delete: if isAdmin();
     }
 
     match /car_inspections/{inspectionId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidCarInspection(request.resource.data) && uidUnchanged();
-      allow update: if isAuthenticated() && isValidCarInspection(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'competitor', 'user']) && isValidCarInspection(request.resource.data) && uidUnchanged();
+      allow update: if (hasRole(['admin', 'head_scrutineer', 'scrutineer_staff']) || (isDocOwner() && hasRole(['competitor', 'user']))) && isValidCarInspection(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if hasRole(['admin', 'head_scrutineer']);
     }
 
     match /inspections/{inspectionId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidInspection(request.resource.data) && uidUnchanged();
-      allow update: if isAuthenticated() && isValidInspection(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'competitor', 'user']) && isValidInspection(request.resource.data) && uidUnchanged();
+      allow update: if (hasRole(['admin', 'head_scrutineer', 'scrutineer_staff']) || (isDocOwner() && hasRole(['competitor', 'user']))) && isValidInspection(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if hasRole(['admin', 'head_scrutineer']);
     }
 
     match /reports/{reportId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidReport(request.resource.data) && uidUnchanged();
-      allow update: if isAuthenticated() && isValidReport(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if hasRole(['admin', 'head_scrutineer']) && isValidReport(request.resource.data) && uidUnchanged();
+      allow update: if hasRole(['admin', 'head_scrutineer']) && isValidReport(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if hasRole(['admin', 'head_scrutineer']);
     }
 
     match /requests/{requestId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidRequest(request.resource.data) && uidUnchanged();
-      allow update: if isAuthenticated() && isValidRequest(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow read: if hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'steward']) || isDocOwner();
+      allow create: if hasRole(['admin', 'secretary', 'competitor', 'user']) && isValidRequest(request.resource.data) && uidUnchanged();
+      allow update: if (hasRole(['admin', 'secretary', 'president', 'head_scrutineer', 'steward']) || (isDocOwner() && hasRole(['competitor', 'user']))) && isValidRequest(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if hasRole(['admin', 'secretary']) || (isDocOwner() && hasRole(['competitor', 'user']));
     }
   }
 }

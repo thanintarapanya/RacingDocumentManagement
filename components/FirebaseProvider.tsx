@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/firebase';
 import { useAppStore, Entry, DeletedItem } from '@/lib/store';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
@@ -14,15 +14,37 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const setEntries = useAppStore((state) => state.setEntries);
   const setDeletedItems = useAppStore((state) => state.setDeletedItems);
+  const setUserRole = useAppStore((state) => state.setUserRole);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      setIsAuthReady(true);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            setUserRole(userDoc.data().role);
+          } else {
+            // Default role if not found
+            if (user.email === 'info@embeddedlinuxgroup.com') {
+              setUserRole('admin');
+              await setDoc(userDocRef, { email: user.email, role: 'admin', createdAt: new Date().toISOString() });
+            } else {
+              setUserRole('competitor');
+              await setDoc(userDocRef, { email: user.email, role: 'competitor', createdAt: new Date().toISOString() });
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching user role:", error);
+          setUserRole('competitor'); // Fallback
+        }
+        setIsAuthReady(true);
         if (pathname === '/login') {
           router.push('/');
         }
       } else {
+        setUserRole(null);
+        setIsAuthReady(true);
         if (pathname !== '/login') {
           router.push('/login');
         }
@@ -30,7 +52,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribeAuth();
-  }, [pathname, router]);
+  }, [pathname, router, setUserRole]);
 
   useEffect(() => {
     if (!isAuthReady || !auth.currentUser) return;

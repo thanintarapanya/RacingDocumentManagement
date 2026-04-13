@@ -30,8 +30,10 @@ export type DeletedItem = {
 interface AppState {
   entries: Entry[];
   deletedItems: DeletedItem[];
+  userRole: string | null;
   setEntries: (entries: Entry[]) => void;
   setDeletedItems: (items: DeletedItem[]) => void;
+  setUserRole: (role: string | null) => void;
   addEntry: (entry: Omit<Entry, 'id' | 'created' | 'lastUpdate'>) => Promise<void>;
   updateEntry: (id: number, entry: Partial<Entry>) => Promise<void>;
   deleteEntry: (id: number) => Promise<void>;
@@ -41,8 +43,10 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   entries: [],
   deletedItems: [],
+  userRole: null,
   setEntries: (entries) => set({ entries }),
   setDeletedItems: (deletedItems) => set({ deletedItems }),
+  setUserRole: (userRole) => set({ userRole }),
   
   addEntry: async (entryData) => {
     const user = auth.currentUser;

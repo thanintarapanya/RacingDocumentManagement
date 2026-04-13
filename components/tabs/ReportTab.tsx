@@ -16,9 +16,19 @@ import {
   Check,
   Loader2
 } from 'lucide-react';
+
+const SERIES_CATEGORIES = [
+  'Siam GT', 
+  'Siam1500', 
+  'Siam Group N', 
+  'Siam Group A', 
+  'Siam Truck', 
+  'Siam Eco'
+];
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
+import { useAppStore } from '@/lib/store';
 
 interface PassedCar {
   carNumber: string;
@@ -33,6 +43,7 @@ interface FailedCar {
 interface Report {
   id: string;
   stadium: string;
+  event?: string;
   reportSession: string;
   race: string;
   series: string;
@@ -51,6 +62,7 @@ const initialFormData = {
   race: '',
   series: '',
   grades: '',
+  event: '',
   passedCars: [] as PassedCar[],
   failedCars: [] as FailedCar[],
 };
@@ -92,6 +104,9 @@ export default function ReportTab() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState(false);
+
+  const userRole = useAppStore(state => state.userRole);
+  const canEdit = ['admin', 'president', 'head_scrutineer'].includes(userRole || '');
   
   // Form Wizard States
   const [currentStep, setCurrentStep] = useState(1);
@@ -99,6 +114,8 @@ export default function ReportTab() {
   
   // List View States
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('All');
+  const [eventFilter, setEventFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Report, direction: 'asc' | 'desc' } | null>(null);
   const [recordsPerPage, setRecordsPerPage] = useState(20);
   
@@ -161,10 +178,12 @@ export default function ReportTab() {
     let filtered = reports.filter(report => {
       const searchLower = search.toLowerCase();
       return (
-        report.series?.toLowerCase().includes(searchLower) ||
+        (report.series?.toLowerCase().includes(searchLower) ||
         report.grades?.toLowerCase().includes(searchLower) ||
         report.stadium?.toLowerCase().includes(searchLower) ||
-        report.reportSession?.toLowerCase().includes(searchLower)
+        report.reportSession?.toLowerCase().includes(searchLower)) &&
+        (activeTab === 'All' || (report.series || '').toLowerCase() === activeTab.toLowerCase()) &&
+        (eventFilter === '' || (report.event || '').toLowerCase().includes(eventFilter.toLowerCase()))
       );
     });
 
@@ -179,11 +198,12 @@ export default function ReportTab() {
     }
 
     return filtered;
-  }, [reports, search, sortConfig]);
+  }, [reports, search, sortConfig, activeTab, eventFilter]);
 
   const handleEdit = (report: Report) => {
     setFormData({
       stadium: report.stadium || '',
+      event: report.event || '',
       reportSession: report.reportSession || '',
       race: report.race || '',
       series: report.series || '',
@@ -200,6 +220,7 @@ export default function ReportTab() {
   const handleView = (report: Report) => {
     setFormData({
       stadium: report.stadium || '',
+      event: report.event || '',
       reportSession: report.reportSession || '',
       race: report.race || '',
       series: report.series || '',
@@ -332,9 +353,9 @@ export default function ReportTab() {
         type={type}
         value={formData[field] as string}
         onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
-        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
         placeholder={`Enter ${label.toLowerCase()}`}
-        disabled={viewMode}
+        disabled={viewMode || !canEdit}
       />
     </div>
   );
@@ -346,8 +367,8 @@ export default function ReportTab() {
         <select
           value={formData[field] as string}
           onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
-          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
-          disabled={viewMode}
+          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={viewMode || !canEdit}
         >
           <option value="">Select {label}</option>
           {options.map(opt => (
@@ -379,7 +400,7 @@ export default function ReportTab() {
               checked={formData[field] === opt} 
               onChange={(e) => setFormData({ ...formData, [field]: e.target.value })} 
               className="hidden" 
-              disabled={viewMode}
+              disabled={viewMode || !canEdit}
             />
             <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
               formData[field] === opt ? 'border-orange-500' : 'border-slate-300'
@@ -422,17 +443,62 @@ export default function ReportTab() {
                   className="w-full bg-white border border-slate-200 rounded-full py-2.5 pl-11 pr-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all placeholder:text-slate-400"
                 />
               </div>
-              <button 
-                onClick={() => {
-                  setFormData(initialFormData);
-                  setEditingId(null);
-                  setCurrentStep(1);
-                  setView('form');
-                }}
-                className="whitespace-nowrap px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10"
+              <div className="relative flex-1 min-w-[150px]">
+                <select
+                  value={eventFilter}
+                  onChange={(e) => setEventFilter(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
+                >
+                  <option value="">All Events</option>
+                  <option value="1/2026">1/2026</option>
+                  <option value="2/2026">2/2026</option>
+                  <option value="3/2026">3/2026</option>
+                  <option value="4/2026">4/2026</option>
+                  <option value="5/2026">5/2026</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+              {canEdit && (
+                <button 
+                  onClick={() => {
+                    setFormData(initialFormData);
+                    setEditingId(null);
+                    setCurrentStep(1);
+                    setView('form');
+                  }}
+                  className="whitespace-nowrap px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10"
+                >
+                  Create Scrutineering Report
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 print:hidden">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide w-full sm:w-auto">
+              <button
+                onClick={() => setActiveTab('All')}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  activeTab === 'All' 
+                    ? 'bg-slate-900 text-white shadow-md' 
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                }`}
               >
-                Create Scrutineering Report
+                All Series
               </button>
+              {SERIES_CATEGORIES.map(category => (
+                <button
+                  key={category}
+                  onClick={() => setActiveTab(category)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                    activeTab === category 
+                      ? 'bg-slate-900 text-white shadow-md' 
+                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -507,18 +573,22 @@ export default function ReportTab() {
                             >
                               View
                             </button>
-                            <button 
-                              onClick={() => handleEdit(item)}
-                              className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
-                            >
-                              Edit
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(item.id)}
-                              className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
-                            >
-                              Delete
-                            </button>
+                            {canEdit && (
+                              <>
+                                <button 
+                                  onClick={() => handleEdit(item)}
+                                  className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                                >
+                                  Edit
+                                </button>
+                                <button 
+                                  onClick={() => handleDelete(item.id)}
+                                  className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </motion.tr>
@@ -641,13 +711,14 @@ export default function ReportTab() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-6">
-                      {renderSelect('Stadium', 'stadium', ['Chang International Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
-                      {renderSelect('Report Session', 'reportSession', ['Qualify', 'Post-Qualify', 'Post-Race', 'Special Case'])}
-                      {renderInput('Race', 'race')}
+                      {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
+                      {renderSelect('Report Session / รอบการแข่งขัน', 'reportSession', ['Qualify', 'Post-Qualify', 'Post-Race', 'Special Case'])}
+                      {renderInput('Race / เรซ', 'race')}
+                      {renderSelect('Event / งานแข่งขัน', 'event', ['1/2026', '2/2026', '3/2026', '4/2026', '5/2026'])}
                     </div>
                     <div className="space-y-6">
-                      {renderRadioGroup('Series', 'series', ['SIAM GT', 'SIAM 1500', 'SIAM GROUP N', 'SIAM GROUP A', 'SIAM TRUCK', 'SIAM ECO'])}
-                      {renderRadioGroup('Grades', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
+                      {renderRadioGroup('Series / รุ่นการแข่งขัน', 'series', ['SIAM GT', 'SIAM 1500', 'SIAM GROUP N', 'SIAM GROUP A', 'SIAM TRUCK', 'SIAM ECO'])}
+                      {renderRadioGroup('Grades / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
                     </div>
                   </div>
                 </motion.div>
@@ -667,7 +738,7 @@ export default function ReportTab() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium text-slate-700">The following cars have pass post-qualify scrutineering</h3>
-                      {!viewMode && (
+                      {!viewMode && canEdit && (
                         <button 
                           onClick={addPassedCar}
                           className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
@@ -679,8 +750,8 @@ export default function ReportTab() {
                     
                     {formData.passedCars.length > 0 && (
                       <div className="grid grid-cols-[1fr_2fr_auto] gap-4 mb-2 px-2">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Car Number</div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remark</div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Car Number / หมายเลขรถ</div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remark / หมายเหตุ</div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium text-center w-10">Action</div>
                       </div>
                     )}
@@ -693,18 +764,18 @@ export default function ReportTab() {
                             value={car.carNumber}
                             onChange={(e) => updatePassedCar(index, 'carNumber', e.target.value)}
                             placeholder="Car Number"
-                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
-                            disabled={viewMode}
+                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={viewMode || !canEdit}
                           />
                           <input
                             type="text"
                             value={car.remark}
                             onChange={(e) => updatePassedCar(index, 'remark', e.target.value)}
                             placeholder="Remark"
-                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
-                            disabled={viewMode}
+                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={viewMode || !canEdit}
                           />
-                          {!viewMode && (
+                          {!viewMode && canEdit && (
                             <button 
                               onClick={() => removePassedCar(index)}
                               className="w-12 h-[46px] shrink-0 flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
@@ -726,7 +797,7 @@ export default function ReportTab() {
                   <div className="space-y-4 pt-6 border-t border-slate-100">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium text-slate-700">The following cars have not pass post-qualify scrutineering for the reason stated</h3>
-                      {!viewMode && (
+                      {!viewMode && canEdit && (
                         <button 
                           onClick={addFailedCar}
                           className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
@@ -738,8 +809,8 @@ export default function ReportTab() {
 
                     {formData.failedCars.length > 0 && (
                       <div className="grid grid-cols-[1fr_2fr_auto] gap-4 mb-2 px-2">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Car Number</div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Reason</div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Car Number / หมายเลขรถ</div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Reason / เหตุผล</div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium text-center w-10">Action</div>
                       </div>
                     )}
@@ -752,18 +823,18 @@ export default function ReportTab() {
                             value={car.carNumber}
                             onChange={(e) => updateFailedCar(index, 'carNumber', e.target.value)}
                             placeholder="Car Number"
-                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
-                            disabled={viewMode}
+                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={viewMode || !canEdit}
                           />
                           <input
                             type="text"
                             value={car.reason}
                             onChange={(e) => updateFailedCar(index, 'reason', e.target.value)}
                             placeholder="Reason"
-                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
-                            disabled={viewMode}
+                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={viewMode || !canEdit}
                           />
-                          {!viewMode && (
+                          {!viewMode && canEdit && (
                             <button 
                               onClick={() => removeFailedCar(index)}
                               className="w-12 h-[46px] shrink-0 flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
@@ -802,7 +873,7 @@ export default function ReportTab() {
                 Next
               </button>
             ) : (
-              !viewMode && (
+              !viewMode && canEdit && (
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting}

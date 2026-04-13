@@ -20,6 +20,9 @@ import {
   LogOut
 } from 'lucide-react';
 
+import { useAppStore } from '@/lib/store';
+import { RoleSwitcher } from '@/components/RoleSwitcher';
+
 const LoadingFallback = () => (
   <div className="w-full h-full flex items-center justify-center">
     <div className="w-8 h-8 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
@@ -46,9 +49,28 @@ const TABS = [
 
 export default function Home() {
   const router = useRouter();
+  const userRole = useAppStore(state => state.userRole);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
+
+  const availableTabs = useMemo(() => {
+    switch (userRole) {
+      case 'admin':
+      case 'president':
+        return TABS;
+      case 'secretary':
+        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request'].includes(t.id));
+      case 'head_scrutineer':
+        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'report', 'request'].includes(t.id));
+      case 'scrutineer_staff':
+        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'report'].includes(t.id));
+      case 'competitor':
+        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'request'].includes(t.id));
+      default:
+        return TABS.filter(t => ['dashboard'].includes(t.id));
+    }
+  }, [userRole]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -56,8 +78,8 @@ export default function Home() {
   }, []);
 
   const ActiveComponent = useMemo(() => {
-    return TABS.find(t => t.id === activeTab)?.component || DashboardTab;
-  }, [activeTab]);
+    return availableTabs.find(t => t.id === activeTab)?.component || DashboardTab;
+  }, [activeTab, availableTabs]);
 
   if (!isMounted) return null;
 
@@ -94,7 +116,7 @@ export default function Home() {
 
         <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-y-auto py-4 flex flex-col gap-2 px-3" orientation="vertical">
           <Tabs.List className="flex flex-col gap-2" aria-orientation="vertical">
-            {TABS.map((tab) => (
+            {availableTabs.map((tab) => (
               <Tabs.Trigger
                 key={tab.id}
                 value={tab.id}
@@ -125,6 +147,7 @@ export default function Home() {
         </Tabs.Root>
 
         <div className="p-4 border-t border-slate-200 space-y-2">
+          <RoleSwitcher isSidebarOpen={isSidebarOpen} />
           <button className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors w-full">
             <Settings className="w-5 h-5 flex-shrink-0" />
             <AnimatePresence>
@@ -182,7 +205,9 @@ export default function Home() {
               <Bell className="w-5 h-5 text-slate-500" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.5)]"></span>
             </button>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-indigo-500 border border-slate-200"></div>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-indigo-500 border border-slate-200 flex items-center justify-center text-white text-xs font-bold uppercase" title={userRole || 'User'}>
+              {userRole ? userRole.charAt(0) : 'U'}
+            </div>
           </div>
         </header>
 

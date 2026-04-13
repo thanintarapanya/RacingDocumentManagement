@@ -62,12 +62,16 @@ export default function ChecklistTab() {
   const { entries } = useAppStore();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>('All');
+  const [eventFilter, setEventFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
   const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
   const [checklists, setChecklists] = useState<Record<number, Record<string, boolean>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const userRole = useAppStore(state => state.userRole);
+  const canEdit = ['admin', 'president', 'secretary'].includes(userRole || '');
 
   // Topics Management
   const [topics, setTopics] = useState<string[]>(['Track Day Check']);
@@ -210,7 +214,8 @@ export default function ChecklistTab() {
       (entry.nameEn.toLowerCase().includes(search.toLowerCase()) || 
       entry.nameTh.includes(search) ||
       entry.carNumber.includes(search)) &&
-      (activeTab === 'All' || (entry.seriesRace || '').toLowerCase() === activeTab.toLowerCase())
+      (activeTab === 'All' || (entry.seriesRace || '').toLowerCase() === activeTab.toLowerCase()) &&
+      (eventFilter === '' || (entry.formData?.event || '').toLowerCase().includes(eventFilter.toLowerCase()))
     );
 
     if (sortConfig !== null) {
@@ -233,7 +238,7 @@ export default function ChecklistTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, entries, activeTab]);
+  }, [search, sortConfig, entries, activeTab, eventFilter]);
 
   const groupedEntries = useMemo(() => {
     const grouped = SERIES_CATEGORIES.map(category => ({
@@ -325,6 +330,21 @@ export default function ChecklistTab() {
                   className="w-full bg-white border border-slate-200 rounded-full py-2 pl-11 pr-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all placeholder:text-slate-400"
                 />
               </div>
+              <div className="relative flex-1 min-w-[120px] sm:min-w-[150px]">
+                <select
+                  value={eventFilter}
+                  onChange={(e) => setEventFilter(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-full py-2 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
+                >
+                  <option value="">All Events</option>
+                  <option value="1/2026">1/2026</option>
+                  <option value="2/2026">2/2026</option>
+                  <option value="3/2026">3/2026</option>
+                  <option value="4/2026">4/2026</option>
+                  <option value="5/2026">5/2026</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
 
               <button 
                 onClick={exportToPDF}
@@ -335,7 +355,7 @@ export default function ChecklistTab() {
                 <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export PDF'}</span>
               </button>
 
-              {selectedEntries.length > 0 && (
+              {selectedEntries.length > 0 && canEdit && (
                 <>
                   <button 
                     onClick={() => handleBulkCheck(true)}
@@ -395,13 +415,15 @@ export default function ChecklistTab() {
             >
               {topics.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <button 
-              onClick={() => setIsManageTopicsOpen(true)}
-              className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors shrink-0"
-              title="Manage Topics"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+            {canEdit && (
+              <button 
+                onClick={() => setIsManageTopicsOpen(true)}
+                className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors shrink-0"
+                title="Manage Topics"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -417,16 +439,17 @@ export default function ChecklistTab() {
                         type="checkbox" 
                         checked={selectedEntries.length > 0 && selectedEntries.length === sortedAndFilteredEntries.length}
                         onChange={toggleSelectAll}
-                        className="w-4 h-4 rounded border-slate-300 accent-orange-500 cursor-pointer"
+                        disabled={!canEdit}
+                        className={`w-4 h-4 rounded border-slate-300 accent-orange-500 ${!canEdit ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                       />
                     </div>
                   </th>
-                  <SortableHeader label="NAME (EN)" sortKey="nameEn" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="NAME (TH)" sortKey="nameTh" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="SERIES RACE" sortKey="seriesRace" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="GRADE RACE" sortKey="gradeRace" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="CAR NUMBER" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="LICENSE NUMBER" sortKey="licenseNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="NAME (EN) / ชื่อ (ภาษาอังกฤษ)" sortKey="nameEn" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="NAME (TH) / ชื่อ (ภาษาไทย)" sortKey="nameTh" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="SERIES RACE / รุ่นการแข่งขัน" sortKey="seriesRace" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="GRADE RACE / คลาส" sortKey="gradeRace" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="CAR NUMBER / หมายเลขรถ" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="LICENSE NUMBER / หมายเลขใบอนุญาต" sortKey="licenseNumber" sortConfig={sortConfig} requestSort={requestSort} />
                   <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-center">
                     {activeTopic}
                   </th>
@@ -462,7 +485,8 @@ export default function ChecklistTab() {
                               type="checkbox" 
                               checked={isSelected}
                               onChange={() => toggleSelect(entry.id)}
-                              className="w-4 h-4 rounded border-slate-300 accent-orange-500 cursor-pointer"
+                              disabled={!canEdit}
+                              className={`w-4 h-4 rounded border-slate-300 accent-orange-500 ${!canEdit ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                             />
                           </div>
                         </td>
@@ -487,7 +511,8 @@ export default function ChecklistTab() {
                         <td className="px-6 py-5 text-center">
                           <button 
                             onClick={() => handleToggleCheck(entry.id, !isChecked)}
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                            disabled={!canEdit}
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors border ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''} ${
                               isChecked 
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
                                 : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'

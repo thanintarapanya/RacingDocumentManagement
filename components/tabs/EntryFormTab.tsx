@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppStore, type Entry } from '@/lib/store';
+import { auth } from '@/firebase';
 import { 
   CheckCircle2, 
   UploadCloud, 
@@ -17,6 +18,15 @@ import {
   X, 
   Loader2 
 } from 'lucide-react';
+
+const SERIES_CATEGORIES = [
+  'Siam GT', 
+  'Siam1500', 
+  'Siam Group N', 
+  'Siam Group A', 
+  'Siam Truck', 
+  'Siam Eco'
+];
 
 const steps = [
   { id: 1, label: 'Series Race' },
@@ -63,15 +73,34 @@ const SortableHeader = ({
 
 export default function EntryFormTab() {
   const { entries, addEntry, updateEntry, deleteEntry } = useAppStore();
+  const userRole = useAppStore(state => state.userRole);
+  const currentUser = auth.currentUser;
+
+  const canEditAll = ['admin', 'president', 'secretary'].includes(userRole || '');
+  const canEditCarOnly = ['head_scrutineer', 'scrutineer_staff'].includes(userRole || '');
+  const canEditOwn = userRole === 'competitor' || userRole === 'user';
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const isOwnDoc = editingId ? (entries.find(e => e.id === editingId)?.userId === currentUser?.uid) : true;
+  
+  const canEditField = (field: string) => {
+    if (canEditAll) return true;
+    if (canEditOwn && isOwnDoc) return true;
+    if (canEditCarOnly) {
+      const carFields = ['carManufacturer', 'model', 'engineDisplacement', 'engineCode', 'transmission', 'drivetrain', 'gearShiftPattern', 'autoGearMoreThan6', 'paddleShift'];
+      return carFields.includes(field);
+    }
+    return false;
+  };
   const [view, setView] = useState<'list' | 'form' | 'view'>('list');
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, File[]>>({});
   
   // List View States
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('All');
+  const [eventFilter, setEventFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Entry, direction: 'asc' | 'desc' } | null>(null);
   
   // Export/Import States
@@ -111,6 +140,7 @@ export default function EntryFormTab() {
     grade: '',
     carNumber: '',
     stadium: '',
+    event: '',
     // Step 2
     nameThai: '',
     nameEnglish: '',
@@ -195,7 +225,7 @@ export default function EntryFormTab() {
         setUploadedFiles({});
         // Reset form
         setFormData({
-          series: '', grade: '', carNumber: '', stadium: '',
+          series: '', grade: '', carNumber: '', stadium: '', event: '',
           nameThai: '', nameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
           competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
           consentingParty: '', signDate: '',
@@ -261,9 +291,11 @@ export default function EntryFormTab() {
 
   const sortedAndFilteredEntries = useMemo(() => {
     let filtered = entries.filter(entry => 
-      entry.nameEn.toLowerCase().includes(search.toLowerCase()) || 
+      (entry.nameEn.toLowerCase().includes(search.toLowerCase()) || 
       entry.nameTh.includes(search) ||
-      entry.carNumber.includes(search)
+      entry.carNumber.includes(search)) &&
+      (activeTab === 'All' || (entry.seriesRace || '').toLowerCase() === activeTab.toLowerCase()) &&
+      (eventFilter === '' || (entry.formData?.event || '').toLowerCase().includes(eventFilter.toLowerCase()))
     );
 
     if (sortConfig !== null) {
@@ -278,7 +310,7 @@ export default function EntryFormTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, entries]);
+  }, [search, sortConfig, entries, activeTab, eventFilter]);
 
   // Import / Export Handlers
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -313,8 +345,9 @@ export default function EntryFormTab() {
         type={type} 
         value={formData[field]}
         onChange={(e) => handleChange(field, e.target.value)}
-        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
         placeholder={placeholder || label}
+        disabled={!canEditField(field)}
       />
     </div>
   );
@@ -325,7 +358,8 @@ export default function EntryFormTab() {
       <select 
         value={formData[field]}
         onChange={(e) => handleChange(field, e.target.value)}
-        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
+        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
+        disabled={!canEditField(field)}
       >
         <option value="" disabled>Select {label}</option>
         {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -352,18 +386,20 @@ export default function EntryFormTab() {
 
   const renderFileUpload = (label: string, hint?: string) => {
     const files = uploadedFiles[label] || [];
+    const isDisabled = !canEditAll && !canEditOwn;
     return (
       <div className="space-y-2">
         <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
-        <label className="border border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center hover:bg-orange-50/30 hover:border-orange-200 transition-colors cursor-pointer group relative block">
+        <label className={`border border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors relative block ${isDisabled ? 'opacity-60 cursor-not-allowed bg-slate-50' : 'hover:bg-orange-50/30 hover:border-orange-200 cursor-pointer group'}`}>
           <input 
             type="file" 
             multiple 
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            className={`absolute inset-0 w-full h-full opacity-0 ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onChange={(e) => handleFileChange(label, e)}
+            disabled={isDisabled}
           />
-          <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-orange-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-all mx-auto">
-            <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-orange-500" />
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 transition-all mx-auto ${isDisabled ? 'bg-slate-100' : 'bg-slate-100 group-hover:bg-orange-100 group-hover:scale-110'}`}>
+            <UploadCloud className={`w-5 h-5 ${isDisabled ? 'text-slate-400' : 'text-slate-500 group-hover:text-orange-500'}`} />
           </div>
           <span className="text-sm font-medium text-slate-700 block">Click to upload</span>
           <span className="text-xs font-light text-slate-400 mt-1 block">or drag and drop (multiple files allowed)</span>
@@ -374,13 +410,15 @@ export default function EntryFormTab() {
             {files.map((file, idx) => (
               <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
                 <span className="text-xs text-slate-600 truncate max-w-[200px]">{file.name}</span>
-                <button 
-                  type="button" 
-                  onClick={(e) => { e.preventDefault(); removeFile(label, idx); }}
-                  className="text-slate-400 hover:text-rose-500 transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
+                {!isDisabled && (
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.preventDefault(); removeFile(label, idx); }}
+                    className="text-slate-400 hover:text-rose-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -416,6 +454,21 @@ export default function EntryFormTab() {
                 className="w-full bg-white border border-slate-200 rounded-full py-2.5 pl-11 pr-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all placeholder:text-slate-400"
               />
             </div>
+            <div className="relative flex-1 min-w-[150px]">
+              <select
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
+              >
+                <option value="">All Events</option>
+                <option value="1/2026">1/2026</option>
+                <option value="2/2026">2/2026</option>
+                <option value="3/2026">3/2026</option>
+                <option value="4/2026">4/2026</option>
+                <option value="5/2026">5/2026</option>
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
             
             <label className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-full text-sm font-medium transition-all cursor-pointer shadow-sm">
               {isImporting ? <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" /> : <FileSpreadsheet className="w-4 h-4 text-emerald-600" />}
@@ -436,7 +489,7 @@ export default function EntryFormTab() {
                 setEditingId(null);
                 setUploadedFiles({});
                 setFormData({
-                  series: '', grade: '', carNumber: '', stadium: '',
+                  series: '', grade: '', carNumber: '', stadium: '', event: '',
                   nameThai: '', nameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
                   competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
                   consentingParty: '', signDate: '',
@@ -448,6 +501,34 @@ export default function EntryFormTab() {
             >
               Create Entry
             </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 print:hidden">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide w-full sm:w-auto">
+            <button
+              onClick={() => setActiveTab('All')}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                activeTab === 'All' 
+                  ? 'bg-slate-900 text-white shadow-md' 
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+              }`}
+            >
+              All Series
+            </button>
+            {SERIES_CATEGORIES.map(category => (
+              <button
+                key={category}
+                onClick={() => setActiveTab(category)}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  activeTab === category 
+                    ? 'bg-slate-900 text-white shadow-md' 
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -513,18 +594,22 @@ export default function EntryFormTab() {
                           >
                             View
                           </button>
-                          <button 
-                            onClick={() => handleEdit(entry)}
-                            className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(entry.id)}
-                            className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
-                          >
-                            Delete
-                          </button>
+                          {(canEditAll || canEditCarOnly || (canEditOwn && entry.userId === currentUser?.uid)) && (
+                            <button 
+                              onClick={() => handleEdit(entry)}
+                              className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {(canEditAll || (canEditOwn && entry.userId === currentUser?.uid)) && (
+                            <button 
+                              onClick={() => handleDelete(entry.id)}
+                              className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>
@@ -942,32 +1027,33 @@ export default function EntryFormTab() {
             >
               {currentStep === 1 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {renderSelect('Series Race', 'series', seriesOptions)}
-                  {renderSelect('Grade Race', 'grade', gradeOptions)}
-                  {renderInput('Car Number', 'carNumber', 'number')}
-                  {renderSelect('Stadium', 'stadium', stadiumOptions)}
+                  {renderSelect('Series Race / รุ่นการแข่งขัน', 'series', seriesOptions)}
+                  {renderSelect('Grade Race / คลาส', 'grade', gradeOptions)}
+                  {renderInput('Car Number / หมายเลขรถ', 'carNumber', 'number')}
+                  {renderSelect('Stadium / สนามแข่งขัน', 'stadium', stadiumOptions)}
+                  {renderSelect('Event / งานแข่งขัน', 'event', ['1/2026', '2/2026', '3/2026', '4/2026', '5/2026'])}
                 </div>
               )}
 
               {currentStep === 2 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {renderInput('Name (Thai)', 'nameThai')}
-                  {renderInput('Name (English)', 'nameEnglish')}
-                  {renderInput('Date of Birth', 'dob', 'date')}
-                  {renderSelect('Blood Type', 'bloodType', bloodTypes)}
-                  {renderInput('Nationality', 'nationality')}
-                  {renderInput('ID Card / Passport No.', 'idCard')}
+                  {renderInput('Name (Thai) / ชื่อ (ภาษาไทย)', 'nameThai')}
+                  {renderInput('Name (English) / ชื่อ (ภาษาอังกฤษ)', 'nameEnglish')}
+                  {renderInput('Date of Birth / วันเดือนปีเกิด', 'dob', 'date')}
+                  {renderSelect('Blood Type / กรุ๊ปเลือด', 'bloodType', bloodTypes)}
+                  {renderInput('Nationality / สัญชาติ', 'nationality')}
+                  {renderInput('ID Card / Passport No. / หมายเลขบัตรประชาชน / พาสปอร์ต', 'idCard')}
                   <div className="md:col-span-2">
-                    {renderInput('Address', 'address')}
+                    {renderInput('Address / ที่อยู่', 'address')}
                   </div>
-                  {renderInput('Postcode', 'postcode')}
-                  {renderInput('Email', 'email', 'email')}
-                  {renderInput('Mobile No.', 'mobileNo', 'tel')}
-                  {renderInput('ID Line', 'idLine')}
-                  {renderInput('Instagram', 'instagram')}
-                  {renderInput('Facebook', 'facebook')}
-                  {renderInput('Youtube', 'youtube')}
-                  {renderInput('Tiktok', 'tiktok')}
+                  {renderInput('Postcode / รหัสไปรษณีย์', 'postcode')}
+                  {renderInput('Email / อีเมล', 'email', 'email')}
+                  {renderInput('Mobile No. / เบอร์โทรศัพท์', 'mobileNo', 'tel')}
+                  {renderInput('ID Line / ไอดีไลน์', 'idLine')}
+                  {renderInput('Instagram / อินสตาแกรม', 'instagram')}
+                  {renderInput('Facebook / เฟสบุ๊ค', 'facebook')}
+                  {renderInput('Youtube / ยูทูป', 'youtube')}
+                  {renderInput('Tiktok / ติ๊กต๊อก', 'tiktok')}
                 </div>
               )}
 
@@ -976,34 +1062,34 @@ export default function EntryFormTab() {
                   <div className="md:col-span-2 border-b border-slate-100 pb-4 mb-2">
                     <h2 className="text-lg font-light text-slate-900">Driver License</h2>
                   </div>
-                  {renderInput('Competition License No.', 'competitionLicenseNo')}
-                  {renderInput('Categorization Grade', 'categorizationGrade')}
-                  {renderInput('Issued By', 'issuedBy')}
-                  {renderInput('Date of Issued', 'dateOfIssued', 'date')}
-                  {renderInput('Expiry Date', 'expiryDate', 'date')}
+                  {renderInput('Competition License No. / หมายเลขใบอนุญาตแข่งขัน', 'competitionLicenseNo')}
+                  {renderInput('Categorization Grade / เกรดนักแข่ง', 'categorizationGrade')}
+                  {renderInput('Issued By / ออกโดย', 'issuedBy')}
+                  {renderInput('Date of Issued / วันที่ออก', 'dateOfIssued', 'date')}
+                  {renderInput('Expiry Date / วันหมดอายุ', 'expiryDate', 'date')}
 
                   <div className="md:col-span-2 border-b border-slate-100 pb-4 mb-2 mt-4">
                     <h2 className="text-lg font-light text-slate-900">Car Info</h2>
                   </div>
-                  {renderInput('Car Manufacturer', 'carManufacturer')}
-                  {renderInput('Model', 'model')}
-                  {renderInput('Color', 'color')}
-                  {renderInput('Year', 'year', 'number')}
-                  {renderInput('Engine Size (CC)', 'engineSize', 'number')}
-                  {renderInput('Engine Code', 'engineCode')}
+                  {renderInput('Car Manufacturer / ยี่ห้อรถ', 'carManufacturer')}
+                  {renderInput('Model / รุ่น', 'model')}
+                  {renderInput('Color / สี', 'color')}
+                  {renderInput('Year / ปี', 'year', 'number')}
+                  {renderInput('Engine Size (CC) / ขนาดเครื่องยนต์ (ซีซี)', 'engineSize', 'number')}
+                  {renderInput('Engine Code / รหัสเครื่องยนต์', 'engineCode')}
 
                   <div className="md:col-span-2 border-b border-slate-100 pb-4 mb-2 mt-4">
                     <h2 className="text-lg font-light text-slate-900">Team Info</h2>
                   </div>
-                  {renderInput('Team Name', 'teamName')}
-                  {renderInput('Team Manager Name', 'teamManagerName')}
-                  {renderInput('Manager Mobile No.', 'managerMobileNo', 'tel')}
-                  {renderInput('Require together for pit area (Team Name)', 'requireTogetherForPitArea')}
+                  {renderInput('Team Name / ชื่อทีม', 'teamName')}
+                  {renderInput('Team Manager Name / ชื่อผู้จัดการทีม', 'teamManagerName')}
+                  {renderInput('Manager Mobile No. / เบอร์โทรศัพท์ผู้จัดการทีม', 'managerMobileNo', 'tel')}
+                  {renderInput('Require together for pit area (Team Name) / ต้องการพิทติดกัน (ชื่อทีม)', 'requireTogetherForPitArea')}
                   <div className="md:col-span-2">
-                    {renderInput('Address for send document', 'addressForSendDocument')}
+                    {renderInput('Address for send document / ที่อยู่สำหรับจัดส่งเอกสาร', 'addressForSendDocument')}
                   </div>
-                  {renderInput('Postcode', 'teamPostcode')}
-                  {renderInput('Mobile No.', 'teamMobileNo', 'tel')}
+                  {renderInput('Postcode / รหัสไปรษณีย์', 'teamPostcode')}
+                  {renderInput('Mobile No. / เบอร์โทรศัพท์', 'teamMobileNo', 'tel')}
                 </div>
               )}
 
@@ -1035,8 +1121,8 @@ export default function EntryFormTab() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderInput('Consenting & Acknowledging Party', 'consentingParty')}
-                    {renderInput('Sign Date', 'signDate', 'date')}
+                    {renderInput('Consenting & Acknowledging Party / ผู้ยินยอมและรับทราบ', 'consentingParty')}
+                    {renderInput('Sign Date / วันที่เซ็น', 'signDate', 'date')}
                     <div className="md:col-span-2">
                       {renderFileUpload('Digital Signature', 'Please upload your signature as an image (JPG, PNG) or PDF file')}
                     </div>
@@ -1087,7 +1173,7 @@ export default function EntryFormTab() {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting || isSubmitted}
+              disabled={isSubmitting || isSubmitted || (!canEditAll && !canEditOwn && !canEditCarOnly)}
               className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (

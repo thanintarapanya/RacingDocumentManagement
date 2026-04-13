@@ -14,12 +14,23 @@ import {
   Check,
   UploadCloud
 } from 'lucide-react';
+
+const SERIES_CATEGORIES = [
+  'Siam GT', 
+  'Siam1500', 
+  'Siam Group N', 
+  'Siam Group A', 
+  'Siam Truck', 
+  'Siam Eco'
+];
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
+import { useAppStore } from '@/lib/store';
 
 type Inspection = {
   id: string;
+  userId?: string;
   inspectionDate: string;
   racingModel: string;
   carNumber: string;
@@ -69,6 +80,7 @@ const initialFormData = {
   stadium: '',
   series: '',
   grades: '',
+  event: '',
   carNumber: '',
   teamName: '',
   racerName: '',
@@ -139,6 +151,8 @@ export default function InspectionTab() {
   
   // List View States
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('All');
+  const [eventFilter, setEventFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Inspection, direction: 'asc' | 'desc' } | null>(null);
   const [recordsPerPage, setRecordsPerPage] = useState(20);
   
@@ -169,6 +183,31 @@ export default function InspectionTab() {
   );
 
   const [formData, setFormData] = useState(initialFormData);
+
+  const entries = useAppStore(state => state.entries);
+  const userRole = useAppStore(state => state.userRole);
+  const currentUser = auth.currentUser;
+
+  const canEditAll = ['admin', 'president', 'head_scrutineer', 'scrutineer_staff'].includes(userRole || '');
+  const canEditOwn = userRole === 'competitor' || userRole === 'user';
+  const isOwnDoc = editingId ? (inspections.find(i => i.id === editingId)?.userId === currentUser?.uid) : true;
+  const canEdit = canEditAll || (canEditOwn && isOwnDoc);
+
+  useEffect(() => {
+    if (formData.series && formData.carNumber) {
+      const entry = entries.find(e => e.seriesRace === formData.series && e.carNumber === formData.carNumber);
+      if (entry && entry.formData) {
+        setFormData(prev => ({
+          ...prev,
+          teamName: entry.formData.teamName || '',
+          racerName: entry.formData.nameEnglish || entry.formData.nameThai || '',
+          teamManagerName: entry.formData.teamManagerName || '',
+          carManufacturer: entry.formData.carManufacturer || '',
+          model: entry.formData.model || '',
+        }));
+      }
+    }
+  }, [formData.series, formData.carNumber, entries]);
 
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, File[]>>({});
 
@@ -359,10 +398,12 @@ export default function InspectionTab() {
 
   const sortedAndFilteredInspections = useMemo(() => {
     let filtered = inspections.filter(item => 
-      (item.racerName || '').toLowerCase().includes(search.toLowerCase()) || 
+      ((item.racerName || '').toLowerCase().includes(search.toLowerCase()) || 
       (item.teamName || '').toLowerCase().includes(search.toLowerCase()) ||
       (item.carNumber || '').includes(search) ||
-      (item.racingModel || '').toLowerCase().includes(search.toLowerCase())
+      (item.racingModel || '').toLowerCase().includes(search.toLowerCase())) &&
+      (activeTab === 'All' || (item.racingModel || '').toLowerCase() === activeTab.toLowerCase()) &&
+      (eventFilter === '' || (item.formData?.event || '').toLowerCase().includes(eventFilter.toLowerCase()))
     );
 
     if (sortConfig !== null) {
@@ -379,7 +420,33 @@ export default function InspectionTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, inspections]);
+  }, [search, sortConfig, inspections, activeTab, eventFilter]);
+
+  const renderSelect = (label: string, field: string, options: string[], className = '') => {
+    const keys = field.split('.');
+    let value = formData as any;
+    for (const key of keys) {
+      value = value?.[key];
+    }
+    
+    return (
+      <div className={`space-y-2 ${className}`}>
+        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
+        <div className="relative">
+          <select 
+            value={value || ''}
+            onChange={(e) => handleChange(field, e.target.value)}
+            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={!canEdit}
+          >
+            <option value="" disabled>Select {label.split('/')[0].trim()}</option>
+            {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        </div>
+      </div>
+    );
+  };
 
   const renderInput = (label: string, field: string, type = 'text', placeholder = '', className = '') => {
     const keys = field.split('.');
@@ -395,8 +462,9 @@ export default function InspectionTab() {
           type={type} 
           value={value || ''}
           onChange={(e) => handleChange(field, e.target.value)}
-          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300"
+          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
           placeholder={placeholder || label}
+          disabled={!canEdit}
         />
       </div>
     );
@@ -410,7 +478,7 @@ export default function InspectionTab() {
     }
     
     return (
-      <label className={`flex items-center gap-3 cursor-pointer group ${className}`}>
+      <label className={`flex items-center gap-3 cursor-pointer group ${className} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}>
         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${checked ? 'bg-orange-500 border-orange-500' : 'border-slate-300 group-hover:border-orange-400 bg-white'}`}>
           {checked && <Check className="w-3.5 h-3.5 text-white" />}
         </div>
@@ -420,6 +488,7 @@ export default function InspectionTab() {
           className="hidden"
           checked={!!checked}
           onChange={(e) => handleChange(field, e.target.checked)}
+          disabled={!canEdit}
         />
       </label>
     );
@@ -460,6 +529,21 @@ export default function InspectionTab() {
                 className="w-full bg-white border border-slate-200 rounded-full py-2.5 pl-11 pr-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all placeholder:text-slate-400"
               />
             </div>
+            <div className="relative flex-1 min-w-[150px]">
+              <select
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
+              >
+                <option value="">All Events</option>
+                <option value="1/2026">1/2026</option>
+                <option value="2/2026">2/2026</option>
+                <option value="3/2026">3/2026</option>
+                <option value="4/2026">4/2026</option>
+                <option value="5/2026">5/2026</option>
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
             
             <button 
               onClick={() => {
@@ -472,6 +556,34 @@ export default function InspectionTab() {
             >
               Create Inspection Form
             </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 print:hidden">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide w-full sm:w-auto">
+            <button
+              onClick={() => setActiveTab('All')}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                activeTab === 'All' 
+                  ? 'bg-slate-900 text-white shadow-md' 
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+              }`}
+            >
+              All Series
+            </button>
+            {SERIES_CATEGORIES.map(category => (
+              <button
+                key={category}
+                onClick={() => setActiveTab(category)}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  activeTab === category 
+                    ? 'bg-slate-900 text-white shadow-md' 
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -543,18 +655,22 @@ export default function InspectionTab() {
                           >
                             History
                           </button>
-                          <button 
-                            onClick={() => handleEdit(item)}
-                            className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(item.id)}
-                            className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
-                          >
-                            Delete
-                          </button>
+                          {(canEditAll || (canEditOwn && item.userId === currentUser?.uid)) && (
+                            <>
+                              <button 
+                                onClick={() => handleEdit(item)}
+                                className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                              >
+                                Edit
+                              </button>
+                              <button 
+                                onClick={() => handleDelete(item.id)}
+                                className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </motion.tr>
@@ -898,14 +1014,15 @@ export default function InspectionTab() {
                   className="space-y-8"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderInput('Inspection Date', 'inspectionDate', 'date')}
-                    {renderInput('Stadium', 'stadium')}
-                    {renderInput('Series', 'series')}
-                    {renderInput('Grades', 'grades')}
-                    {renderInput('Car Number', 'carNumber')}
-                    {renderInput('Team Name', 'teamName')}
-                    {renderInput('Racer Name', 'racerName')}
-                    {renderInput('Team Manager Name', 'teamManagerName')}
+                    {renderInput('Inspection Date / วันที่ตรวจสภาพ', 'inspectionDate', 'date')}
+                    {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
+                    {renderSelect('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
+                    {renderSelect('Grades / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
+                    {renderSelect('Event / งานแข่งขัน', 'event', ['1/2026', '2/2026', '3/2026', '4/2026', '5/2026'])}
+                    {renderInput('Car Number / หมายเลขรถ', 'carNumber')}
+                    {renderInput('Team Name / ชื่อทีม', 'teamName')}
+                    {renderInput('Racer Name / ชื่อนักแข่ง', 'racerName')}
+                    {renderInput('Team Manager Name / ชื่อผู้จัดการทีม', 'teamManagerName')}
                   </div>
                 </motion.div>
               )}
@@ -920,26 +1037,26 @@ export default function InspectionTab() {
                   className="space-y-8"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderInput('Car Manufacturer', 'carManufacturer')}
-                    {renderInput('Model', 'model')}
-                    {renderInput('Engine Displacement (CC)', 'engineDisplacement')}
-                    {renderInput('Engine Code', 'engineCode')}
-                    {renderInput('Transmission', 'transmission')}
-                    {renderInput('Drivetrain', 'drivetrain')}
-                    {renderInput('Gear Shift Pattern', 'gearShiftPattern')}
+                    {renderInput('Car Manufacturer / ยี่ห้อรถ', 'carManufacturer')}
+                    {renderInput('Model / รุ่น', 'model')}
+                    {renderInput('Engine Displacement (CC) / ความจุกระบอกสูบ (ซีซี)', 'engineDisplacement')}
+                    {renderInput('Engine Code / รหัสเครื่องยนต์', 'engineCode')}
+                    {renderInput('Transmission / ระบบเกียร์', 'transmission')}
+                    {renderInput('Drivetrain / ระบบขับเคลื่อน', 'drivetrain')}
+                    {renderInput('Gear Shift Pattern / รูปแบบการเข้าเกียร์', 'gearShiftPattern')}
                   </div>
                   
                   <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderCheckbox('Auto Gear more than 6 Speed', 'autoGearMoreThan6')}
-                    {renderCheckbox('Paddle Shift', 'paddleShift')}
+                    {renderCheckbox('Auto Gear more than 6 Speed / เกียร์อัตโนมัติมากกว่า 6 สปีด', 'autoGearMoreThan6')}
+                    {renderCheckbox('Paddle Shift / แพดเดิลชิฟท์', 'paddleShift')}
                   </div>
-
+                  
                   <div className="pt-4 border-t border-slate-100">
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Tire Mark Amount</h3>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Tire Mark Amount / จำนวนการมาร์คยาง</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {renderInput('Yokohama', 'tireMarkAmount.yokohama')}
-                      {renderInput('Hankook', 'tireMarkAmount.hankook')}
-                      {renderInput('Giti', 'tireMarkAmount.giti')}
+                      {renderInput('Yokohama / โยโกฮาม่า', 'tireMarkAmount.yokohama')}
+                      {renderInput('Hankook / ฮันกุก', 'tireMarkAmount.hankook')}
+                      {renderInput('Giti / จีที', 'tireMarkAmount.giti')}
                     </div>
                   </div>
                 </motion.div>
@@ -955,103 +1072,103 @@ export default function InspectionTab() {
                   className="space-y-8"
                 >
                   <div>
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Car Light</h3>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Car Light / ระบบไฟรถยนต์</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {renderCheckbox('Head Light', 'carLight.headLight')}
-                      {renderCheckbox('Turn Signal', 'carLight.turnSignal')}
-                      {renderCheckbox('Tail Light', 'carLight.tailLight')}
-                      {renderCheckbox('Break Light', 'carLight.breakLight')}
+                      {renderCheckbox('Head Light / ไฟหน้า', 'carLight.headLight')}
+                      {renderCheckbox('Turn Signal / ไฟเลี้ยว', 'carLight.turnSignal')}
+                      {renderCheckbox('Tail Light / ไฟท้าย', 'carLight.tailLight')}
+                      {renderCheckbox('Break Light / ไฟเบรก', 'carLight.breakLight')}
                     </div>
                   </div>
 
                   <div className="pt-6 border-t border-slate-100">
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Car Equipment</h3>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Car Equipment / อุปกรณ์ประจำรถ</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Tow Point</span>
+                        <span className="text-sm text-slate-600">Tow Point / จุดลากจูง</span>
                         <div className="flex gap-4">
-                          {renderCheckbox('Installed', 'carEquipment.towPoint.installed')}
-                          {renderCheckbox('Sticker', 'carEquipment.towPoint.sticker')}
+                          {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.towPoint.installed')}
+                          {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.towPoint.sticker')}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Bonnet Lock</span>
+                        <span className="text-sm text-slate-600">Bonnet Lock / สลักล็อคฝากระโปรง</span>
                         <div className="flex gap-4">
-                          {renderCheckbox('Installed', 'carEquipment.bonnetLock.installed')}
-                          {renderCheckbox('Sticker', 'carEquipment.bonnetLock.sticker')}
+                          {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.bonnetLock.installed')}
+                          {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.bonnetLock.sticker')}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Extinguisher</span>
+                        <span className="text-sm text-slate-600">Extinguisher / ถังดับเพลิง</span>
                         <div className="flex gap-4">
-                          {renderCheckbox('Installed', 'carEquipment.extinguisher.installed')}
-                          {renderCheckbox('Sticker', 'carEquipment.extinguisher.sticker')}
+                          {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.extinguisher.installed')}
+                          {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.extinguisher.sticker')}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Outside Kill Switch</span>
+                        <span className="text-sm text-slate-600">Outside Kill Switch / สวิตช์ตัดไฟภายนอก</span>
                         <div className="flex gap-4">
-                          {renderCheckbox('Installed', 'carEquipment.outsideKillSwitch.installed')}
-                          {renderCheckbox('Sticker', 'carEquipment.outsideKillSwitch.sticker')}
+                          {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.outsideKillSwitch.installed')}
+                          {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.outsideKillSwitch.sticker')}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Inside Kill Switch</span>
+                        <span className="text-sm text-slate-600">Inside Kill Switch / สวิตช์ตัดไฟภายใน</span>
                         <div className="flex gap-4">
-                          {renderCheckbox('Installed', 'carEquipment.insideKillSwitch.installed')}
-                          {renderCheckbox('Sticker', 'carEquipment.insideKillSwitch.sticker')}
+                          {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.insideKillSwitch.installed')}
+                          {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.insideKillSwitch.sticker')}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Seat</span>
+                        <span className="text-sm text-slate-600">Seat / เบาะนั่ง</span>
                         <div className="flex gap-4">
-                          {renderCheckbox('Installed', 'carEquipment.seat.installed')}
-                          {renderCheckbox('Sticker', 'carEquipment.seat.sticker')}
+                          {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.seat.installed')}
+                          {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.seat.sticker')}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Harnesses</span>
+                        <span className="text-sm text-slate-600">Harnesses / เข็มขัดนิรภัย</span>
                         <div className="flex gap-4">
-                          {renderCheckbox('Installed', 'carEquipment.harnesses.installed')}
-                          {renderCheckbox('Sticker', 'carEquipment.harnesses.sticker')}
+                          {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.harnesses.installed')}
+                          {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.harnesses.sticker')}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Roll Over Bar</span>
+                        <span className="text-sm text-slate-600">Roll Over Bar / โรลบาร์</span>
                         <div className="flex gap-4">
-                          {renderCheckbox('Installed', 'carEquipment.rollOverBar.installed')}
-                          {renderCheckbox('Sticker', 'carEquipment.rollOverBar.sticker')}
+                          {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.rollOverBar.installed')}
+                          {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.rollOverBar.sticker')}
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <div className="pt-6 border-t border-slate-100">
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Racer Safety</h3>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Racer Safety / อุปกรณ์ความปลอดภัยนักแข่ง</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {renderCheckbox('Helmet', 'racerSafety.helmet')}
-                      {renderCheckbox('HANS', 'racerSafety.hans')}
-                      {renderCheckbox('Balaclava', 'racerSafety.balaclava')}
-                      {renderCheckbox('Glove', 'racerSafety.glove')}
-                      {renderCheckbox('Race Suite', 'racerSafety.raceSuite')}
-                      {renderCheckbox('Sponsor Tag', 'racerSafety.sponsorTag')}
-                      {renderCheckbox('Shoes', 'racerSafety.shoes')}
+                      {renderCheckbox('Helmet / หมวกกันน็อค', 'racerSafety.helmet')}
+                      {renderCheckbox('HANS / อุปกรณ์ป้องกันคอและศีรษะ', 'racerSafety.hans')}
+                      {renderCheckbox('Balaclava / โม่ง', 'racerSafety.balaclava')}
+                      {renderCheckbox('Glove / ถุงมือ', 'racerSafety.glove')}
+                      {renderCheckbox('Race Suite / ชุดแข่ง', 'racerSafety.raceSuite')}
+                      {renderCheckbox('Sponsor Tag / ป้ายสปอนเซอร์', 'racerSafety.sponsorTag')}
+                      {renderCheckbox('Shoes / รองเท้า', 'racerSafety.shoes')}
                     </div>
                   </div>
 
                   <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderInput('Engine Seal Number', 'engineSealNumber')}
-                    {renderInput('Gear Seal Number', 'gearSealNumber')}
-                    {renderInput('Tire Mark Amount', 'tireMarkAmountStep3')}
-                    {renderInput('Balance of Performance', 'balanceOfPerformance')}
+                    {renderInput('Engine Seal Number / หมายเลขซีลเครื่องยนต์', 'engineSealNumber')}
+                    {renderInput('Gear Seal Number / หมายเลขซีลเกียร์', 'gearSealNumber')}
+                    {renderInput('Tire Mark Amount / จำนวนการมาร์คยาง', 'tireMarkAmountStep3')}
+                    {renderInput('Balance of Performance / การปรับสมดุลสมรรถนะ (BOP)', 'balanceOfPerformance')}
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderCheckbox('PTRS Smoke Detector', 'ptrsSmokeDetector')}
-                    {renderCheckbox('Weight Added After Race 2', 'weightAddedAfterRace2')}
+                    {renderCheckbox('PTRS Smoke Detector / เครื่องตรวจจับควัน PTRS', 'ptrsSmokeDetector')}
+                    {renderCheckbox('Weight Added After Race 2 / น้ำหนักที่ถ่วงเพิ่มหลังเรซ 2', 'weightAddedAfterRace2')}
                   </div>
 
-                  {renderInput('Remark', 'remark')}
+                  {renderInput('Remark / หมายเหตุ', 'remark')}
                 </motion.div>
               )}
 
@@ -1065,7 +1182,7 @@ export default function InspectionTab() {
                   className="space-y-8"
                 >
                   <div>
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Change Engine Seal</h3>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Change Engine Seal / เปลี่ยนซีลเครื่องยนต์</h3>
                     <div className="flex gap-6 mb-6">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input 
@@ -1076,7 +1193,7 @@ export default function InspectionTab() {
                           onChange={(e) => handleChange('changeSeal', e.target.value)}
                           className="text-orange-500 focus:ring-orange-500"
                         />
-                        <span className="text-sm text-slate-700">Not Change Seal</span>
+                        <span className="text-sm text-slate-700">Not Change Seal / ไม่เปลี่ยนซีล</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input 
@@ -1087,16 +1204,16 @@ export default function InspectionTab() {
                           onChange={(e) => handleChange('changeSeal', e.target.value)}
                           className="text-orange-500 focus:ring-orange-500"
                         />
-                        <span className="text-sm text-slate-700">Change Seal</span>
+                        <span className="text-sm text-slate-700">Change Seal / เปลี่ยนซีล</span>
                       </label>
                     </div>
 
                     {formData.changeSeal === 'Change Seal' && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {renderInput('Current Engine Seal Number', 'currentEngineSealNumber')}
-                        {renderInput('New Engine Seal Number', 'newEngineSealNumber')}
+                        {renderInput('Current Engine Seal Number / หมายเลขซีลเครื่องยนต์เดิม', 'currentEngineSealNumber')}
+                        {renderInput('New Engine Seal Number / หมายเลขซีลเครื่องยนต์ใหม่', 'newEngineSealNumber')}
                         <div className="md:col-span-2">
-                          {renderInput('Reason for changing seal', 'reasonForChangingSeal')}
+                          {renderInput('Reason for changing seal / เหตุผลที่เปลี่ยนซีล', 'reasonForChangingSeal')}
                         </div>
                       </div>
                     )}
@@ -1141,7 +1258,7 @@ export default function InspectionTab() {
             ) : (
               <button 
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !canEdit}
                 className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}

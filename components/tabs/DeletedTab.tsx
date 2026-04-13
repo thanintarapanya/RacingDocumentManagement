@@ -8,6 +8,8 @@ import { Trash2, RotateCcw, FileText, AlertTriangle, Clock } from 'lucide-react'
 export default function DeletedTab() {
   const { deletedItems, restoreItem } = useAppStore();
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const userRole = useAppStore(state => state.userRole);
+  const canRestore = userRole === 'admin';
 
   const handleRestore = (id: string) => {
     setRestoringId(id);
@@ -89,20 +91,22 @@ export default function DeletedTab() {
                         </div>
                       </td>
                       <td className="p-4 text-right">
-                        <button 
-                          onClick={() => handleRestore(item.id)}
-                          disabled={restoringId === item.id}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg transition-all text-sm font-medium disabled:opacity-50"
-                        >
-                          {restoringId === item.id ? (
-                            <motion.div animate={{ rotate: -360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                        {canRestore && (
+                          <button 
+                            onClick={() => handleRestore(item.id)}
+                            disabled={restoringId === item.id}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg transition-all text-sm font-medium disabled:opacity-50"
+                          >
+                            {restoringId === item.id ? (
+                              <motion.div animate={{ rotate: -360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                                <RotateCcw className="w-4 h-4" />
+                              </motion.div>
+                            ) : (
                               <RotateCcw className="w-4 h-4" />
-                            </motion.div>
-                          ) : (
-                            <RotateCcw className="w-4 h-4" />
-                          )}
-                          Restore
-                        </button>
+                            )}
+                            Restore
+                          </button>
+                        )}
                       </td>
                     </motion.tr>
                   ))}
