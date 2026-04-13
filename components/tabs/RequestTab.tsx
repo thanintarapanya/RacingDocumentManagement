@@ -345,7 +345,7 @@ export default function RequestTab() {
       setNewRequest(prev => ({ 
         ...prev, 
         ...updates
-      }));
+      } as any));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'requests');
     } finally {
