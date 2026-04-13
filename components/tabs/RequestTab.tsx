@@ -312,7 +312,7 @@ export default function RequestTab() {
 
       await updateDoc(doc(db, 'requests', editingId), updates);
       
-      setNewRequest(prev => ({ ...prev, ...updates }));
+      setNewRequest(prev => ({ ...prev, ...updates } as any));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'requests');
     } finally {
@@ -385,7 +385,7 @@ export default function RequestTab() {
     
     try {
       const updates = {
-        chiefInspectionStatus: 'Approved',
+        chiefInspectionStatus: 'Approved' as const,
         chiefInspectionSignName: auth.currentUser.displayName || auth.currentUser.email || 'Chief Inspection',
         chiefInspectionSignDate: new Date().toISOString().split('T')[0],
         chiefInspectionComment: newRequest.chiefInspectionComment || '',
@@ -394,7 +394,7 @@ export default function RequestTab() {
 
       await updateDoc(doc(db, 'requests', editingId), updates);
       
-      setNewRequest(prev => ({ ...prev, ...updates }));
+      setNewRequest(prev => ({ ...prev, ...updates } as any));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'requests');
     } finally {
