@@ -320,7 +320,7 @@ export default function RequestTab() {
     }
   };
 
-  const handleToggleApproval = async (type: 'chairman' | 'steward') => {
+  const handleToggleApproval = async (type: 'chairman' | 'steward' | 'chief_inspection') => {
     if (!auth.currentUser || !editingId) return;
     setIsSubmitting(true);
     
