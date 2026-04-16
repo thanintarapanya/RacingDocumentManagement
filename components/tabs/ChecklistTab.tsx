@@ -13,19 +13,21 @@ import {
   FileText,
   Settings,
   X,
-  Plus
+  Plus,
+  History
 } from 'lucide-react';
 
 const SERIES_CATEGORIES = [
-  'Siam GT', 
-  'Siam1500', 
-  'Siam Group N', 
-  'Siam Group A', 
-  'Siam Truck', 
-  'Siam Eco'
+  'SIAM GTMC',
+  'SIAM GTRC',
+  'SIAM TRUCK',
+  'SIAM Group A',
+  'SIAM Group N',
+  'SIAM ECO',
+  'ISUZU Challenge Thailand'
 ];
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, doc, setDoc, query } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, query, arrayUnion } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 
 const SortableHeader = ({ 
@@ -33,18 +35,20 @@ const SortableHeader = ({
   sortKey, 
   align = 'left',
   sortConfig,
-  requestSort
+  requestSort,
+  className = ''
 }: { 
   label: string, 
   sortKey: string, 
   align?: 'left' | 'right' | 'center',
   sortConfig: { key: string, direction: 'asc' | 'desc' } | null,
-  requestSort: (key: string) => void
+  requestSort: (key: string) => void,
+  className?: string
 }) => {
   const isActive = sortConfig?.key === sortKey;
   return (
     <th 
-      className={`px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 cursor-pointer hover:text-slate-700 hover:bg-slate-50/50 transition-colors select-none ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}`}
+      className={`px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 cursor-pointer hover:text-slate-700 hover:bg-slate-50/50 transition-colors select-none ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'} ${className}`}
       onClick={() => requestSort(sortKey)}
     >
       <div className={`flex items-center gap-2 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
@@ -58,24 +62,34 @@ const SortableHeader = ({
   );
 };
 
+interface ChecklistData {
+  topics: Record<string, { checked: boolean; timestamp: string; updatedBy: string }>;
+  changelog: Array<{
+    topic: string;
+    checked: boolean;
+    timestamp: string;
+    userId: string;
+    userName: string;
+  }>;
+}
+
 export default function ChecklistTab() {
   const { entries } = useAppStore();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>('All');
   const [eventFilter, setEventFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
-  const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
-  const [checklists, setChecklists] = useState<Record<number, Record<string, boolean>>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checklists, setChecklists] = useState<Record<number, ChecklistData>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [logModalEntryId, setLogModalEntryId] = useState<number | null>(null);
 
   const userRole = useAppStore(state => state.userRole);
   const canEdit = ['admin', 'president', 'secretary'].includes(userRole || '');
 
   // Topics Management
   const [topics, setTopics] = useState<string[]>(['Track Day Check']);
-  const [activeTopic, setActiveTopic] = useState<string>('Track Day Check');
   const [isManageTopicsOpen, setIsManageTopicsOpen] = useState(false);
   const [newTopic, setNewTopic] = useState('');
 
@@ -89,37 +103,45 @@ export default function ChecklistTab() {
     if (!auth.currentUser) return;
     const unsubscribe = onSnapshot(doc(db, 'settings', 'checklist'), (docSnap) => {
       if (docSnap.exists() && docSnap.data().topics?.length > 0) {
-        const fetchedTopics = docSnap.data().topics;
-        setTopics(fetchedTopics);
-        if (!fetchedTopics.includes(activeTopic)) {
-          setActiveTopic(fetchedTopics[0]);
-        }
+        setTopics(docSnap.data().topics);
       } else {
         const defaultTopics = ['Track Day Check', 'Event 1 Register', 'Attendant Racer Meeting', 'Receive Document'];
         setTopics(defaultTopics);
-        setActiveTopic(defaultTopics[0]);
         setDoc(doc(db, 'settings', 'checklist'), { topics: defaultTopics }).catch(console.error);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/checklist');
     });
     return () => unsubscribe();
-  }, [activeTopic]);
+  }, []);
 
   // Fetch Checklists
   useEffect(() => {
     if (!auth.currentUser) return;
     const q = query(collection(db, 'checklists'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data: Record<number, Record<string, boolean>> = {};
+      const data: Record<number, ChecklistData> = {};
       snapshot.docs.forEach(doc => {
         const docData = doc.data();
         const entryTopics = docData.topics || {};
-        // Legacy support
-        if (docData.isChecked !== undefined && entryTopics['Track Day Check'] === undefined) {
-          entryTopics['Track Day Check'] = docData.isChecked;
-        }
-        data[Number(doc.id)] = entryTopics;
+        const parsedTopics: Record<string, any> = {};
+        
+        Object.keys(entryTopics).forEach(key => {
+          if (typeof entryTopics[key] === 'boolean') {
+            parsedTopics[key] = { 
+              checked: entryTopics[key], 
+              timestamp: docData.updatedAt || '', 
+              updatedBy: docData.userId || '' 
+            };
+          } else {
+            parsedTopics[key] = entryTopics[key];
+          }
+        });
+
+        data[Number(doc.id)] = {
+          topics: parsedTopics,
+          changelog: docData.changelog || []
+        };
       });
       setChecklists(data);
     }, (error) => {
@@ -128,39 +150,34 @@ export default function ChecklistTab() {
     return () => unsubscribe();
   }, []);
 
-  const handleBulkCheck = async (newValue: boolean) => {
-    if (selectedEntries.length === 0) return;
-    setIsSubmitting(true);
-    try {
-      for (const id of selectedEntries) {
-        const docRef = doc(db, 'checklists', id.toString());
-        await setDoc(docRef, {
-          topics: {
-            [activeTopic]: newValue
-          },
-          updatedAt: new Date().toISOString(),
-          userId: auth.currentUser?.uid
-        }, { merge: true });
-      }
-      setSelectedEntries([]);
-      showToast(`Candidates successfully marked as ${newValue ? 'Checked' : 'Not Checked'}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'checklists');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleToggleCheck = async (id: number, newValue: boolean) => {
+  const handleToggleCheck = async (id: number, topic: string, newValue: boolean) => {
     try {
       const docRef = doc(db, 'checklists', id.toString());
+      const currentUser = auth.currentUser;
+      const userName = currentUser?.displayName || currentUser?.email || 'Unknown User';
+      const timestamp = new Date().toISOString();
+      
+      const logEntry = {
+        topic,
+        checked: newValue,
+        timestamp,
+        userId: currentUser?.uid || '',
+        userName
+      };
+
       await setDoc(docRef, {
         topics: {
-          [activeTopic]: newValue
+          [topic]: {
+            checked: newValue,
+            timestamp,
+            updatedBy: currentUser?.uid || ''
+          }
         },
-        updatedAt: new Date().toISOString(),
-        userId: auth.currentUser?.uid
+        changelog: arrayUnion(logEntry),
+        updatedAt: timestamp,
+        userId: currentUser?.uid
       }, { merge: true });
+      
       showToast(`Marked as ${newValue ? 'Checked' : 'Not Checked'}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'checklists');
@@ -177,7 +194,6 @@ export default function ChecklistTab() {
     try {
       await setDoc(doc(db, 'settings', 'checklist'), { topics: updatedTopics }, { merge: true });
       setNewTopic('');
-      setActiveTopic(newTopic.trim());
       showToast('Topic added');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'settings');
@@ -192,10 +208,23 @@ export default function ChecklistTab() {
     const updatedTopics = topics.filter(t => t !== topicToDelete);
     try {
       await setDoc(doc(db, 'settings', 'checklist'), { topics: updatedTopics }, { merge: true });
-      if (activeTopic === topicToDelete) {
-        setActiveTopic(updatedTopics[0]);
-      }
       showToast('Topic deleted');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings');
+    }
+  };
+
+  const handleMoveTopic = async (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === topics.length - 1) return;
+
+    const newTopics = [...topics];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    [newTopics[index], newTopics[targetIndex]] = [newTopics[targetIndex], newTopics[index]];
+
+    try {
+      await setDoc(doc(db, 'settings', 'checklist'), { topics: newTopics }, { merge: true });
+      setTopics(newTopics);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'settings');
     }
@@ -215,7 +244,8 @@ export default function ChecklistTab() {
       entry.nameTh.includes(search) ||
       entry.carNumber.includes(search)) &&
       (activeTab === 'All' || (entry.seriesRace || '').toLowerCase() === activeTab.toLowerCase()) &&
-      (eventFilter === '' || (entry.formData?.event || '').toLowerCase().includes(eventFilter.toLowerCase()))
+      (eventFilter === '' || (entry.formData?.event || '').toLowerCase() === eventFilter.toLowerCase()) &&
+      (yearFilter === '' || (entry.formData?.eventYear || '').toLowerCase() === yearFilter.toLowerCase())
     );
 
     if (sortConfig !== null) {
@@ -238,7 +268,7 @@ export default function ChecklistTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, entries, activeTab, eventFilter]);
+  }, [search, sortConfig, entries, activeTab, eventFilter, yearFilter]);
 
   const groupedEntries = useMemo(() => {
     const grouped = SERIES_CATEGORIES.map(category => ({
@@ -267,20 +297,6 @@ export default function ChecklistTab() {
 
   const exportToPDF = async () => {
     window.print();
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedEntries.length === sortedAndFilteredEntries.length && sortedAndFilteredEntries.length > 0) {
-      setSelectedEntries([]);
-    } else {
-      setSelectedEntries(sortedAndFilteredEntries.map(e => e.id));
-    }
-  };
-
-  const toggleSelect = (id: number) => {
-    setSelectedEntries(prev => 
-      prev.includes(id) ? prev.filter(entryId => entryId !== id) : [...prev, id]
-    );
   };
 
   const renderToast = () => (
@@ -337,11 +353,26 @@ export default function ChecklistTab() {
                   className="w-full bg-white border border-slate-200 rounded-full py-2 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
                 >
                   <option value="">All Events</option>
-                  <option value="1/2026">1/2026</option>
-                  <option value="2/2026">2/2026</option>
-                  <option value="3/2026">3/2026</option>
-                  <option value="4/2026">4/2026</option>
-                  <option value="5/2026">5/2026</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+              <div className="relative flex-1 min-w-[120px] sm:min-w-[150px]">
+                <select
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-full py-2 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
+                >
+                  <option value="">All Years</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
                 </select>
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
@@ -354,28 +385,6 @@ export default function ChecklistTab() {
                 {isExporting ? <Loader2 className="w-4 h-4 text-orange-500 animate-spin" /> : <FileText className="w-4 h-4 text-orange-500" />}
                 <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export PDF'}</span>
               </button>
-
-              {selectedEntries.length > 0 && canEdit && (
-                <>
-                  <button 
-                    onClick={() => handleBulkCheck(true)}
-                    disabled={isSubmitting}
-                    className="whitespace-nowrap px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-full text-sm font-medium transition-all shadow-sm flex items-center gap-2"
-                  >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    <span className="hidden sm:inline">Mark Checked</span>
-                  </button>
-
-                  <button 
-                    onClick={() => handleBulkCheck(false)}
-                    disabled={isSubmitting}
-                    className="whitespace-nowrap px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-full text-sm font-medium transition-all shadow-sm flex items-center gap-2"
-                  >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                    <span className="hidden sm:inline">Mark Not Checked</span>
-                  </button>
-                </>
-              )}
             </div>
           </div>
         </div>
@@ -406,25 +415,6 @@ export default function ChecklistTab() {
               </button>
             ))}
           </div>
-
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 w-full sm:w-auto shrink-0">
-            <select 
-              value={activeTopic}
-              onChange={(e) => setActiveTopic(e.target.value)}
-              className="bg-transparent border-none text-sm font-medium text-slate-700 focus:ring-0 py-1.5 pl-3 pr-8 cursor-pointer w-full sm:w-auto outline-none"
-            >
-              {topics.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            {canEdit && (
-              <button 
-                onClick={() => setIsManageTopicsOpen(true)}
-                className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors shrink-0"
-                title="Manage Topics"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            )}
-          </div>
         </div>
 
         <div id="checklist-table-container" className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden print-page landscape print-scale-down">
@@ -433,26 +423,31 @@ export default function ChecklistTab() {
               <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr>
-                  <th data-html2canvas-ignore className="px-6 py-5 border-b border-slate-100 w-16">
-                    <div className="flex items-center justify-center">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedEntries.length > 0 && selectedEntries.length === sortedAndFilteredEntries.length}
-                        onChange={toggleSelectAll}
-                        disabled={!canEdit}
-                        className={`w-4 h-4 rounded border-slate-300 accent-orange-500 ${!canEdit ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                      />
-                    </div>
-                  </th>
+                  <SortableHeader label="CAR NUMBER / หมายเลขรถ" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} className="sticky left-0 z-20 bg-white shadow-[1px_0_0_0_#f1f5f9]" />
                   <SortableHeader label="NAME (EN) / ชื่อ (ภาษาอังกฤษ)" sortKey="nameEn" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="NAME (TH) / ชื่อ (ภาษาไทย)" sortKey="nameTh" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="LICENSE NUMBER / หมายเลขใบอนุญาต" sortKey="licenseNumber" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="SERIES RACE / รุ่นการแข่งขัน" sortKey="seriesRace" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="GRADE RACE / คลาส" sortKey="gradeRace" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="CAR NUMBER / หมายเลขรถ" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="LICENSE NUMBER / หมายเลขใบอนุญาต" sortKey="licenseNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  {topics.map(topic => (
+                    <th key={topic} className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-center">
+                      {topic}
+                    </th>
+                  ))}
                   <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-center">
-                    {activeTopic}
+                    LOGS
                   </th>
+                  {canEdit && (
+                    <th className="px-6 py-5 border-b border-slate-100 w-16 text-right">
+                      <button 
+                        onClick={() => setIsManageTopicsOpen(true)}
+                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors inline-flex"
+                        title="Manage Topics"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -460,13 +455,11 @@ export default function ChecklistTab() {
                   {groupedEntries.map((group) => (
                     <Fragment key={group.category}>
                       <tr className="bg-slate-50/80 border-y border-slate-100">
-                        <td colSpan={8} className="px-6 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        <td colSpan={7 + topics.length + (canEdit ? 1 : 0)} className="px-6 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
                           {group.category} <span className="text-slate-400 font-normal ml-2">({group.entries.length})</span>
                         </td>
                       </tr>
                       {group.entries.map((entry) => {
-                        const isChecked = checklists[entry.id]?.[activeTopic] || false;
-                        const isSelected = selectedEntries.includes(entry.id);
                         
                         return (
                           <motion.tr 
@@ -476,19 +469,11 @@ export default function ChecklistTab() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                            className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative ${isSelected ? 'bg-orange-50/30' : ''}`}
+                            className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative`}
                             style={{ pageBreakInside: 'avoid' }}
                           >
-                            <td data-html2canvas-ignore className="px-6 py-5">
-                          <div className="flex items-center justify-center">
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected}
-                              onChange={() => toggleSelect(entry.id)}
-                              disabled={!canEdit}
-                              className={`w-4 h-4 rounded border-slate-300 accent-orange-500 ${!canEdit ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                            />
-                          </div>
+                        <td className="px-6 py-5 sticky left-0 z-10 bg-white group-hover:bg-slate-50/50 shadow-[1px_0_0_0_#f1f5f9] transition-colors">
+                          <span className="text-sm text-slate-900 font-medium">{entry.carNumber}</span>
                         </td>
                         <td className="px-6 py-5">
                           <span className="text-sm text-slate-900 font-medium uppercase">{entry.nameEn}</span>
@@ -497,30 +482,49 @@ export default function ChecklistTab() {
                           <span className="text-sm text-slate-600 font-light">{entry.nameTh}</span>
                         </td>
                         <td className="px-6 py-5">
+                          <span className="text-sm text-slate-600 font-light">{entry.formData?.competitionLicenseNo || '-'}</span>
+                        </td>
+                        <td className="px-6 py-5">
                           <span className="text-sm text-slate-600 font-light uppercase">{entry.seriesRace}</span>
                         </td>
                         <td className="px-6 py-5">
                           <span className="text-sm text-slate-600 font-light uppercase">{entry.gradeRace}</span>
                         </td>
-                        <td className="px-6 py-5">
-                          <span className="text-sm text-slate-900 font-medium">{entry.carNumber}</span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className="text-sm text-slate-600 font-light">{entry.formData?.competitionLicenseNo || '-'}</span>
-                        </td>
+                        {topics.map(topic => {
+                          const topicData = checklists[entry.id]?.topics?.[topic] || { checked: false, timestamp: '', updatedBy: '' };
+                          const isChecked = topicData.checked;
+                          return (
+                            <td key={topic} className="px-6 py-3 text-center min-w-[120px]">
+                              <div className="flex flex-col items-center justify-center gap-1.5">
+                                <input 
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => handleToggleCheck(entry.id, topic, e.target.checked)}
+                                  disabled={!canEdit}
+                                  className={`w-5 h-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 bg-slate-50 ${!canEdit ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                                />
+                                {isChecked && topicData.timestamp && (
+                                  <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                                    {new Date(topicData.timestamp).toLocaleString('th-TH', { 
+                                      day: '2-digit', month: '2-digit', year: '2-digit', 
+                                      hour: '2-digit', minute: '2-digit' 
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
                         <td className="px-6 py-5 text-center">
                           <button 
-                            onClick={() => handleToggleCheck(entry.id, !isChecked)}
-                            disabled={!canEdit}
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors border ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''} ${
-                              isChecked 
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
-                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                            }`}
+                            onClick={() => setLogModalEntryId(entry.id)}
+                            className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
+                            title="View History"
                           >
-                            {isChecked ? 'Checked' : 'Not Checked'}
+                            <History className="w-4 h-4" />
                           </button>
                         </td>
+                        {canEdit && <td className="px-6 py-5"></td>}
                           </motion.tr>
                         );
                       })}
@@ -530,7 +534,7 @@ export default function ChecklistTab() {
                 
                 {sortedAndFilteredEntries.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500 font-light">
+                    <td colSpan={7 + topics.length + (canEdit ? 1 : 0)} className="px-6 py-12 text-center text-slate-500 font-light">
                       No candidates found.
                     </td>
                   </tr>
@@ -565,13 +569,29 @@ export default function ChecklistTab() {
                 {topics.map((topic, idx) => (
                   <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-3 rounded-xl">
                     <span className="text-sm font-medium text-slate-700">{topic}</span>
-                    <button 
-                      onClick={() => handleDeleteTopic(topic)} 
-                      className="text-slate-400 hover:text-rose-500 transition-colors p-1"
-                      title="Delete Topic"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => handleMoveTopic(idx, 'up')}
+                        disabled={idx === 0}
+                        className="text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-colors p-1"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleMoveTopic(idx, 'down')}
+                        disabled={idx === topics.length - 1}
+                        className="text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-colors p-1"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteTopic(topic)} 
+                        className="text-slate-400 hover:text-rose-500 transition-colors p-1 ml-1"
+                        title="Delete Topic"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -592,6 +612,64 @@ export default function ChecklistTab() {
                   <Plus className="w-4 h-4" />
                   Add
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {logModalEntryId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 w-full max-w-2xl shadow-2xl max-h-[80vh] flex flex-col"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Change Log</h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {entries.find(e => e.id === logModalEntryId)?.nameEn} 
+                    <span className="mx-2">•</span>
+                    Car #{entries.find(e => e.id === logModalEntryId)?.carNumber}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setLogModalEntryId(null)}
+                  className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="overflow-y-auto flex-1 pr-2 scrollbar-hide">
+                {checklists[logModalEntryId]?.changelog?.length > 0 ? (
+                  <div className="space-y-4">
+                    {[...checklists[logModalEntryId].changelog].reverse().map((log, idx) => (
+                      <div key={idx} className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                        <div className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${log.checked ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                          {log.checked ? <CheckCircle2 className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">
+                            {log.topic} <span className="text-slate-500 font-normal">was marked as</span> <span className={log.checked ? 'text-emerald-600' : 'text-rose-600'}>{log.checked ? 'Checked' : 'Not Checked'}</span>
+                          </p>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                            <span>By {log.userName}</span>
+                            <span>•</span>
+                            <span>{new Date(log.timestamp).toLocaleString('th-TH')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    No history available for this candidate.
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

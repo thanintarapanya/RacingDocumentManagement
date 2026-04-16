@@ -205,8 +205,8 @@ export default function Home() {
               <Bell className="w-5 h-5 text-slate-500" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.5)]"></span>
             </button>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-indigo-500 border border-slate-200 flex items-center justify-center text-white text-xs font-bold uppercase" title={userRole || 'User'}>
-              {userRole ? userRole.charAt(0) : 'U'}
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-indigo-500 border border-slate-200 flex items-center justify-center text-white text-xs font-bold uppercase" title={userRole || 'Guest'}>
+              {userRole ? userRole.charAt(0) : 'G'}
             </div>
           </div>
         </header>

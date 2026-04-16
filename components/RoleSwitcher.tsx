@@ -14,8 +14,7 @@ const ROLES = [
   'head_scrutineer',
   'scrutineer_staff',
   'steward',
-  'competitor',
-  'user'
+  'competitor'
 ];
 
 export function RoleSwitcher({ isSidebarOpen }: { isSidebarOpen: boolean }) {

@@ -76,7 +76,7 @@
       "type": "object",
       "properties": {
         "email": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "user"] },
+        "role": { "type": "string", "enum": ["admin", "president", "secretary", "head_scrutineer", "scrutineer_staff", "steward", "competitor"] },
         "createdAt": { "type": "timestamp" }
       },
       "required": ["email", "role", "createdAt"]
@@ -89,7 +89,8 @@
         "topics": { "type": "object" },
         "isChecked": { "type": "boolean" },
         "userId": { "type": "string" },
-        "updatedAt": { "type": "timestamp" }
+        "updatedAt": { "type": "timestamp" },
+        "changelog": { "type": "array" }
       },
       "required": ["userId", "updatedAt"]
     },

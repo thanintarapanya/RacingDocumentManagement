@@ -16,12 +16,13 @@ import {
 } from 'lucide-react';
 
 const SERIES_CATEGORIES = [
-  'Siam GT', 
-  'Siam1500', 
-  'Siam Group N', 
-  'Siam Group A', 
-  'Siam Truck', 
-  'Siam Eco'
+  'SIAM GTMC',
+  'SIAM GTRC',
+  'SIAM TRUCK',
+  'SIAM Group A',
+  'SIAM Group N',
+  'SIAM ECO',
+  'ISUZU Challenge Thailand'
 ];
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
@@ -81,6 +82,7 @@ const initialFormData = {
   series: '',
   grades: '',
   event: '',
+  eventYear: '',
   carNumber: '',
   teamName: '',
   racerName: '',
@@ -153,6 +155,7 @@ export default function InspectionTab() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>('All');
   const [eventFilter, setEventFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Inspection, direction: 'asc' | 'desc' } | null>(null);
   const [recordsPerPage, setRecordsPerPage] = useState(20);
   
@@ -403,7 +406,8 @@ export default function InspectionTab() {
       (item.carNumber || '').includes(search) ||
       (item.racingModel || '').toLowerCase().includes(search.toLowerCase())) &&
       (activeTab === 'All' || (item.racingModel || '').toLowerCase() === activeTab.toLowerCase()) &&
-      (eventFilter === '' || (item.formData?.event || '').toLowerCase().includes(eventFilter.toLowerCase()))
+      (eventFilter === '' || (item.formData?.event || '').toLowerCase() === eventFilter.toLowerCase()) &&
+      (yearFilter === '' || (item.formData?.eventYear || '').toLowerCase() === yearFilter.toLowerCase())
     );
 
     if (sortConfig !== null) {
@@ -420,7 +424,7 @@ export default function InspectionTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, inspections, activeTab, eventFilter]);
+  }, [search, sortConfig, inspections, activeTab, eventFilter, yearFilter]);
 
   const renderSelect = (label: string, field: string, options: string[], className = '') => {
     const keys = field.split('.');
@@ -536,11 +540,26 @@ export default function InspectionTab() {
                 className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
               >
                 <option value="">All Events</option>
-                <option value="1/2026">1/2026</option>
-                <option value="2/2026">2/2026</option>
-                <option value="3/2026">3/2026</option>
-                <option value="4/2026">4/2026</option>
-                <option value="5/2026">5/2026</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+            <div className="relative flex-1 min-w-[150px]">
+              <select
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
+              >
+                <option value="">All Years</option>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+                <option value="2027">2027</option>
+                <option value="2028">2028</option>
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
@@ -1018,7 +1037,8 @@ export default function InspectionTab() {
                     {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
                     {renderSelect('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
                     {renderSelect('Grades / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
-                    {renderSelect('Event / งานแข่งขัน', 'event', ['1/2026', '2/2026', '3/2026', '4/2026', '5/2026'])}
+                    {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3', '4', '5'])}
+                    {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
                     {renderInput('Car Number / หมายเลขรถ', 'carNumber')}
                     {renderInput('Team Name / ชื่อทีม', 'teamName')}
                     {renderInput('Racer Name / ชื่อนักแข่ง', 'racerName')}

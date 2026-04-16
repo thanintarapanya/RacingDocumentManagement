@@ -25,12 +25,13 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { PORTRAIT_BG } from '@/lib/base64-bg';
 
 const SERIES_CATEGORIES = [
-  'Siam GT', 
-  'Siam1500', 
-  'Siam Group N', 
-  'Siam Group A', 
-  'Siam Truck', 
-  'Siam Eco'
+  'SIAM GTMC',
+  'SIAM GTRC',
+  'SIAM TRUCK',
+  'SIAM Group A',
+  'SIAM Group N',
+  'SIAM ECO',
+  'ISUZU Challenge Thailand'
 ];
 
 interface RequestItem {
@@ -123,6 +124,7 @@ export default function RequestTab() {
     carNumber: '',
     series: '',
     event: '',
+    eventYear: '',
     licenseDriverNo: '',
     licenseTeamManagerNo: '',
     nameRequestPermission: '',
@@ -176,6 +178,7 @@ export default function RequestTab() {
   const canSignSteward = ['admin', 'steward'].includes(userRole || '');
   const canSignSecretary = ['admin', 'secretary'].includes(userRole || '');
   const [eventFilter, setEventFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof RequestItem, direction: 'asc' | 'desc' } | null>(null);
   const [recordsPerPage, setRecordsPerPage] = useState(20);
 
@@ -241,7 +244,8 @@ export default function RequestTab() {
         (req.remark || '')?.toLowerCase().includes(searchLower) ||
         req.id?.toLowerCase().includes(searchLower)) &&
         (activeTabFilter === 'All' || (req.series || '').toLowerCase() === activeTabFilter.toLowerCase()) &&
-        (eventFilter === '' || (req.event || '').toLowerCase().includes(eventFilter.toLowerCase()))
+        (eventFilter === '' || (req.event || '').toLowerCase() === eventFilter.toLowerCase()) &&
+        (yearFilter === '' || (req.eventYear || '').toLowerCase() === yearFilter.toLowerCase())
       );
     });
 
@@ -256,7 +260,7 @@ export default function RequestTab() {
     }
 
     return filtered;
-  }, [requests, search, sortConfig, activeTabFilter, eventFilter]);
+  }, [requests, search, sortConfig, activeTabFilter, eventFilter, yearFilter]);
 
   const handleApprove = () => {
     setShowApproveConfirm(true);
@@ -469,6 +473,7 @@ export default function RequestTab() {
       carNumber: req.carNumber || req.car || '',
       series: req.series || '',
       event: req.event || '',
+      eventYear: req.eventYear || '',
       licenseDriverNo: req.licenseDriverNo || '',
       licenseTeamManagerNo: req.licenseTeamManagerNo || '',
       nameRequestPermission: req.nameRequestPermission || '',
@@ -509,6 +514,7 @@ export default function RequestTab() {
       carNumber: req.carNumber || req.car || '',
       series: req.series || '',
       event: req.event || '',
+      eventYear: req.eventYear || '',
       licenseDriverNo: req.licenseDriverNo || '',
       licenseTeamManagerNo: req.licenseTeamManagerNo || '',
       nameRequestPermission: req.nameRequestPermission || '',
@@ -615,11 +621,26 @@ export default function RequestTab() {
                   className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
                 >
                   <option value="">All Events</option>
-                  <option value="1/2026">1/2026</option>
-                  <option value="2/2026">2/2026</option>
-                  <option value="3/2026">3/2026</option>
-                  <option value="4/2026">4/2026</option>
-                  <option value="5/2026">5/2026</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+              <div className="relative flex-1 min-w-[150px]">
+                <select
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
+                >
+                  <option value="">All Years</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
                 </select>
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
@@ -1453,11 +1474,30 @@ export default function RequestTab() {
                           disabled={viewMode || !canEdit}
                         >
                           <option value="" disabled></option>
-                          <option value="1/2026">1/2026</option>
-                          <option value="2/2026">2/2026</option>
-                          <option value="3/2026">3/2026</option>
-                          <option value="4/2026">4/2026</option>
-                          <option value="5/2026">5/2026</option>
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                          <option value="3">3</option>
+                          <option value="4">4</option>
+                          <option value="5">5</option>
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Year / ปีการแข่งขัน</label>
+                      <div className="relative">
+                        <select 
+                          value={newRequest.eventYear || ''}
+                          onChange={(e) => setNewRequest({...newRequest, eventYear: e.target.value})}
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
+                          disabled={viewMode || !canEdit}
+                        >
+                          <option value="" disabled></option>
+                          <option value="2024">2024</option>
+                          <option value="2025">2025</option>
+                          <option value="2026">2026</option>
+                          <option value="2027">2027</option>
+                          <option value="2028">2028</option>
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>

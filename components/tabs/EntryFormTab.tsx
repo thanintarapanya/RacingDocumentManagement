@@ -20,12 +20,13 @@ import {
 } from 'lucide-react';
 
 const SERIES_CATEGORIES = [
-  'Siam GT', 
-  'Siam1500', 
-  'Siam Group N', 
-  'Siam Group A', 
-  'Siam Truck', 
-  'Siam Eco'
+  'SIAM GTMC',
+  'SIAM GTRC',
+  'SIAM TRUCK',
+  'SIAM Group A',
+  'SIAM Group N',
+  'SIAM ECO',
+  'ISUZU Challenge Thailand'
 ];
 
 const steps = [
@@ -36,7 +37,7 @@ const steps = [
   { id: 5, label: 'Confirmation' }
 ];
 
-const seriesOptions = ['SIAM GT', 'SIAM 1500', 'SIAM GROUP N', 'SIAM GROUP A', 'SIAM TRUCK', 'SIAM ECO'];
+const seriesOptions = SERIES_CATEGORIES;
 const gradeOptions = ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2'];
 const stadiumOptions = ['Chang International Circuit', 'PT Songkhla Street Circuit'];
 const bloodTypes = ['A', 'B', 'AB', 'O'];
@@ -101,6 +102,7 @@ export default function EntryFormTab() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>('All');
   const [eventFilter, setEventFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Entry, direction: 'asc' | 'desc' } | null>(null);
   
   // Export/Import States
@@ -141,6 +143,7 @@ export default function EntryFormTab() {
     carNumber: '',
     stadium: '',
     event: '',
+    eventYear: '',
     // Step 2
     nameThai: '',
     nameEnglish: '',
@@ -225,7 +228,7 @@ export default function EntryFormTab() {
         setUploadedFiles({});
         // Reset form
         setFormData({
-          series: '', grade: '', carNumber: '', stadium: '', event: '',
+          series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: '',
           nameThai: '', nameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
           competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
           consentingParty: '', signDate: '',
@@ -295,7 +298,8 @@ export default function EntryFormTab() {
       entry.nameTh.includes(search) ||
       entry.carNumber.includes(search)) &&
       (activeTab === 'All' || (entry.seriesRace || '').toLowerCase() === activeTab.toLowerCase()) &&
-      (eventFilter === '' || (entry.formData?.event || '').toLowerCase().includes(eventFilter.toLowerCase()))
+      (eventFilter === '' || (entry.formData?.event || '').toLowerCase() === eventFilter.toLowerCase()) &&
+      (yearFilter === '' || (entry.formData?.eventYear || '').toLowerCase() === yearFilter.toLowerCase())
     );
 
     if (sortConfig !== null) {
@@ -310,7 +314,7 @@ export default function EntryFormTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, entries, activeTab, eventFilter]);
+  }, [search, sortConfig, entries, activeTab, eventFilter, yearFilter]);
 
   // Import / Export Handlers
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -461,11 +465,26 @@ export default function EntryFormTab() {
                 className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
               >
                 <option value="">All Events</option>
-                <option value="1/2026">1/2026</option>
-                <option value="2/2026">2/2026</option>
-                <option value="3/2026">3/2026</option>
-                <option value="4/2026">4/2026</option>
-                <option value="5/2026">5/2026</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+            <div className="relative flex-1 min-w-[150px]">
+              <select
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-full py-2.5 px-5 text-sm font-light focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all appearance-none text-slate-700"
+              >
+                <option value="">All Years</option>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+                <option value="2027">2027</option>
+                <option value="2028">2028</option>
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
@@ -489,7 +508,7 @@ export default function EntryFormTab() {
                 setEditingId(null);
                 setUploadedFiles({});
                 setFormData({
-                  series: '', grade: '', carNumber: '', stadium: '', event: '',
+                  series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: '',
                   nameThai: '', nameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
                   competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
                   consentingParty: '', signDate: '',
@@ -1031,7 +1050,8 @@ export default function EntryFormTab() {
                   {renderSelect('Grade Race / คลาส', 'grade', gradeOptions)}
                   {renderInput('Car Number / หมายเลขรถ', 'carNumber', 'number')}
                   {renderSelect('Stadium / สนามแข่งขัน', 'stadium', stadiumOptions)}
-                  {renderSelect('Event / งานแข่งขัน', 'event', ['1/2026', '2/2026', '3/2026', '4/2026', '5/2026'])}
+                  {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3', '4', '5'])}
+                  {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
                 </div>
               )}
 
