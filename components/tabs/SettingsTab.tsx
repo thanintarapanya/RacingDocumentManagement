@@ -234,11 +234,11 @@ export default function SettingsTab() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center text-orange-700 font-medium text-sm">
-                                {user.email.charAt(0).toUpperCase()}
+                                {(user.email || user.displayName || 'U').charAt(0).toUpperCase()}
                               </div>
                               <div>
                                 <div className="text-sm font-medium text-slate-900">{user.displayName || 'Unknown'}</div>
-                                <div className="text-xs text-slate-500">{user.email}</div>
+                                <div className="text-xs text-slate-500">{user.email || 'No email provided'}</div>
                               </div>
                             </div>
                           </td>

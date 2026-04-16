@@ -74,7 +74,7 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return hasRequiredFields(['email', 'role', 'createdAt']) &&
-             data.email is string && isValidEmail(data.email) &&
+             data.email is string && (data.email == "" || isValidEmail(data.email)) &&
              data.role in ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'steward', 'competitor'] &&
              data.createdAt is string;
     }

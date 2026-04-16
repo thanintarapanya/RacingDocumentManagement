@@ -149,7 +149,7 @@ export default function InspectionTab() {
   
   // Form Wizard States
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 4;
+  const totalSteps = 5;
   
   // List View States
   const [search, setSearch] = useState('');
@@ -1000,13 +1000,13 @@ export default function InspectionTab() {
           {/* Stepper */}
           <div className="mb-12">
             <div className="flex items-center justify-between mb-4 relative">
-              {[1, 2, 3, 4].map((step) => (
+              {[1, 2, 3, 4, 5].map((step) => (
                 <div key={step} className="flex flex-col items-center gap-2 relative z-10">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= step ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 text-slate-400'}`}>
                     {currentStep > step ? <CheckCircle2 className="w-5 h-5" /> : step}
                   </div>
                   <span className={`text-[10px] uppercase tracking-wider font-medium absolute -bottom-6 whitespace-nowrap ${currentStep >= step ? 'text-orange-600' : 'text-slate-400'}`}>
-                    {step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Inspection' : 'Seal'}
+                    {step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Safety' : step === 4 ? 'Seal & Weight' : 'Final Check'}
                   </span>
                 </div>
               ))}
@@ -1177,15 +1177,7 @@ export default function InspectionTab() {
                   </div>
 
                   <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderInput('Engine Seal Number / หมายเลขซีลเครื่องยนต์', 'engineSealNumber')}
-                    {renderInput('Gear Seal Number / หมายเลขซีลเกียร์', 'gearSealNumber')}
-                    {renderInput('Tire Mark Amount / จำนวนการมาร์คยาง', 'tireMarkAmountStep3')}
-                    {renderInput('Balance of Performance / การปรับสมดุลสมรรถนะ (BOP)', 'balanceOfPerformance')}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {renderCheckbox('PTRS Smoke Detector / เครื่องตรวจจับควัน PTRS', 'ptrsSmokeDetector')}
-                    {renderCheckbox('Weight Added After Race 2 / น้ำหนักที่ถ่วงเพิ่มหลังเรซ 2', 'weightAddedAfterRace2')}
                   </div>
 
                   {renderInput('Remark / หมายเหตุ', 'remark')}
@@ -1202,6 +1194,17 @@ export default function InspectionTab() {
                   className="space-y-8"
                 >
                   <div>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Seal & Weight / ซีลและน้ำหนัก</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {renderInput('Engine Seal Number / หมายเลขซีลเครื่องยนต์', 'engineSealNumber')}
+                      {renderInput('Gear Seal Number / หมายเลขซีลเกียร์', 'gearSealNumber')}
+                      {renderInput('Tire Mark Amount / จำนวนการมาร์คยาง', 'tireMarkAmountStep3')}
+                      {renderInput('Balance of Performance / การปรับสมดุลสมรรถนะ (BOP)', 'balanceOfPerformance')}
+                      {renderCheckbox('Weight Added After Race 2 / น้ำหนักที่ถ่วงเพิ่มหลังเรซ 2', 'weightAddedAfterRace2')}
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100">
                     <h3 className="text-sm font-medium text-slate-900 mb-4">Change Engine Seal / เปลี่ยนซีลเครื่องยนต์</h3>
                     <div className="flex gap-6 mb-6">
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -1244,6 +1247,64 @@ export default function InspectionTab() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {renderFileUpload('Car Photo', 'Upload a photo of the car')}
                       {renderFileUpload('Inspection Document', 'Upload any relevant inspection documents')}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {currentStep === 5 && (
+                <motion.div
+                  key="step5"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-8"
+                >
+                  <div>
+                    <h3 className="text-lg font-medium text-slate-900 mb-6">Final Check</h3>
+                    <div className="space-y-6">
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Driver & Series Info</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                          <div><span className="text-slate-500 block text-xs">Inspection Date</span> {formData.inspectionDate || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Stadium</span> {formData.stadium || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Series</span> {formData.series || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Grades</span> {formData.grades || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Car Number</span> {formData.carNumber || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Team Name</span> {formData.teamName || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Racer Name</span> {formData.racerName || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Team Manager</span> {formData.teamManagerName || '-'}</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Car Info</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                          <div><span className="text-slate-500 block text-xs">Brand</span> {formData.carManufacturer || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Model</span> {formData.model || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Engine Disp.</span> {formData.engineDisplacement || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Engine Code</span> {formData.engineCode || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Transmission</span> {formData.transmission || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Drivetrain</span> {formData.drivetrain || '-'}</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Seal & Weight</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                          <div><span className="text-slate-500 block text-xs">Engine Seal</span> {formData.engineSealNumber || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Gear Seal</span> {formData.gearSealNumber || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">BOP</span> {formData.balanceOfPerformance || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">Change Seal</span> {formData.changeSeal || '-'}</div>
+                          {formData.changeSeal === 'Change Seal' && (
+                            <>
+                              <div><span className="text-slate-500 block text-xs">New Seal</span> {formData.newEngineSealNumber || '-'}</div>
+                              <div className="col-span-2"><span className="text-slate-500 block text-xs">Reason</span> {formData.reasonForChangingSeal || '-'}</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </motion.div>

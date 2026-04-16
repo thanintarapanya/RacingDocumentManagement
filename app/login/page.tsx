@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
-import { ArrowRight, Mail, Lock } from 'lucide-react';
+import { ArrowRight, Mail, Lock, Globe } from 'lucide-react';
 import { auth } from '@/firebase';
 import { GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, OAuthProvider } from 'firebase/auth';
 
@@ -15,10 +15,62 @@ export default function LoginPage() {
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [lang, setLang] = useState<'EN' | 'TH'>('EN');
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+
+  const t = {
+    EN: {
+      title: 'RaceDoc',
+      subtitle: 'Sign in to your account',
+      resetSubtitle: 'Reset your password',
+      emailPlaceholder: 'Email address',
+      passwordPlaceholder: 'Password',
+      forgotPassword: 'Forgot Password?',
+      signInEmail: 'Sign in with Email',
+      sendReset: 'Send Reset Link',
+      backToSignIn: 'Back to sign in',
+      orContinue: 'Or continue with',
+      signInGoogle: 'Google',
+      signInLine: 'Sign in with LINE',
+      noAccount: "Don't have an account?",
+      signUp: 'Sign up',
+      needHelp: 'Need help?',
+      contactSupport: 'Contact Support',
+      emailRequired: 'Please enter your email address first',
+      resetSent: 'Password reset email sent. Please check your inbox.',
+      errorGoogle: 'Failed to sign in with Google',
+      errorEmail: 'Failed to sign in with email',
+      errorLine: 'Failed to sign in with LINE',
+      errorReset: 'Failed to send password reset email'
+    },
+    TH: {
+      title: 'RaceDoc',
+      subtitle: 'เข้าสู่ระบบบัญชีของคุณ',
+      resetSubtitle: 'รีเซ็ตรหัสผ่านของคุณ',
+      emailPlaceholder: 'อีเมล',
+      passwordPlaceholder: 'รหัสผ่าน',
+      forgotPassword: 'ลืมรหัสผ่าน?',
+      signInEmail: 'เข้าสู่ระบบด้วยอีเมล',
+      sendReset: 'ส่งลิงก์รีเซ็ตรหัสผ่าน',
+      backToSignIn: 'กลับไปหน้าเข้าสู่ระบบ',
+      orContinue: 'หรือเข้าสู่ระบบด้วย',
+      signInGoogle: 'Google',
+      signInLine: 'เข้าสู่ระบบด้วย LINE',
+      noAccount: "ยังไม่มีบัญชี?",
+      signUp: 'สมัครสมาชิก',
+      needHelp: 'ต้องการความช่วยเหลือ?',
+      contactSupport: 'ติดต่อฝ่ายสนับสนุน',
+      emailRequired: 'กรุณากรอกอีเมลของคุณก่อน',
+      resetSent: 'ส่งอีเมลรีเซ็ตรหัสผ่านแล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ',
+      errorGoogle: 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ',
+      errorEmail: 'เข้าสู่ระบบด้วยอีเมลไม่สำเร็จ',
+      errorLine: 'เข้าสู่ระบบด้วย LINE ไม่สำเร็จ',
+      errorReset: 'ส่งอีเมลรีเซ็ตรหัสผ่านไม่สำเร็จ'
+    }
+  };
 
   const handleGoogleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +84,7 @@ export default function LoginPage() {
       router.push('/');
     } catch (err: any) {
       console.error('Google login error:', err);
-      setError(err.message || 'Failed to sign in with Google');
+      setError(err.message || t[lang].errorGoogle);
       setIsLoadingGoogle(false);
     }
   };
@@ -48,7 +100,7 @@ export default function LoginPage() {
       router.push('/');
     } catch (err: any) {
       console.error('Email login error:', err);
-      setError(err.message || 'Failed to sign in with email');
+      setError(err.message || t[lang].errorEmail);
       setIsLoadingEmail(false);
     }
   };
@@ -65,7 +117,7 @@ export default function LoginPage() {
       router.push('/');
     } catch (err: any) {
       console.error('LINE login error:', err);
-      setError(err.message || 'Failed to sign in with LINE');
+      setError(err.message || t[lang].errorLine);
       setIsLoadingLine(false);
     }
   };
@@ -73,7 +125,7 @@ export default function LoginPage() {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setError('Please enter your email address first');
+      setError(t[lang].emailRequired);
       return;
     }
     
@@ -83,18 +135,28 @@ export default function LoginPage() {
     
     try {
       await sendPasswordResetEmail(auth, email);
-      setMessage('Password reset email sent. Please check your inbox.');
+      setMessage(t[lang].resetSent);
       setIsForgotPassword(false);
     } catch (err: any) {
       console.error('Password reset error:', err);
-      setError(err.message || 'Failed to send password reset email');
+      setError(err.message || t[lang].errorReset);
     } finally {
       setIsResetting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAFAFA] p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAFAFA] p-6 relative">
+      <div className="absolute top-6 right-6">
+        <button 
+          onClick={() => setLang(lang === 'EN' ? 'TH' : 'EN')}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors shadow-sm"
+        >
+          <Globe className="w-3.5 h-3.5" />
+          {lang === 'EN' ? 'TH' : 'EN'}
+        </button>
+      </div>
+
       <motion.div 
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -102,9 +164,9 @@ export default function LoginPage() {
         className="w-full max-w-sm"
       >
         <div className="flex flex-col items-center text-center mb-12">
-          <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-3">RaceDoc</h1>
+          <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-3">{t[lang].title}</h1>
           <p className="text-slate-400 font-light text-sm tracking-wide">
-            {isForgotPassword ? 'Reset your password' : 'Sign in to your account'}
+            {isForgotPassword ? t[lang].resetSubtitle : t[lang].subtitle}
           </p>
         </div>
 
@@ -128,7 +190,7 @@ export default function LoginPage() {
                 <input
                   type="email"
                   required
-                  placeholder="Email address"
+                  placeholder={t[lang].emailPlaceholder}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all"
@@ -142,7 +204,7 @@ export default function LoginPage() {
                 {isResetting ? (
                   <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <>Send Reset Link <ArrowRight className="w-4 h-4" /></>
+                  <>{t[lang].sendReset} <ArrowRight className="w-4 h-4" /></>
                 )}
               </button>
               <button 
@@ -154,7 +216,7 @@ export default function LoginPage() {
                 }}
                 className="w-full py-2 text-sm text-slate-500 hover:text-slate-800 transition-colors"
               >
-                Back to sign in
+                {t[lang].backToSignIn}
               </button>
             </form>
           ) : (
@@ -166,7 +228,7 @@ export default function LoginPage() {
                     <input
                       type="email"
                       required
-                      placeholder="Email address"
+                      placeholder={t[lang].emailPlaceholder}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all"
@@ -177,7 +239,7 @@ export default function LoginPage() {
                     <input
                       type="password"
                       required
-                      placeholder="Password"
+                      placeholder={t[lang].passwordPlaceholder}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all"
@@ -195,7 +257,7 @@ export default function LoginPage() {
                     }}
                     className="text-xs text-orange-500 hover:text-orange-600 font-medium transition-colors"
                   >
-                    Forgot Password?
+                    {t[lang].forgotPassword}
                   </button>
                 </div>
 
@@ -207,7 +269,7 @@ export default function LoginPage() {
                   {isLoadingEmail ? (
                     <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <>Sign in with Email <ArrowRight className="w-4 h-4" /></>
+                    <>{t[lang].signInEmail} <ArrowRight className="w-4 h-4" /></>
                   )}
                 </button>
               </form>
@@ -217,7 +279,7 @@ export default function LoginPage() {
                   <div className="w-full border-t border-slate-200"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-[#FAFAFA] text-slate-500 font-light">Or continue with</span>
+                  <span className="px-2 bg-[#FAFAFA] text-slate-500 font-light">{t[lang].orContinue}</span>
                 </div>
               </div>
 
@@ -237,7 +299,7 @@ export default function LoginPage() {
                       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                       <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                     </svg>
-                    Google
+                    {t[lang].signInGoogle}
                   </>
                 )}
               </button>
@@ -252,7 +314,7 @@ export default function LoginPage() {
                   <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    Sign in with LINE <ArrowRight className="w-4 h-4" />
+                    {t[lang].signInLine} <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
@@ -262,10 +324,10 @@ export default function LoginPage() {
 
         <div className="mt-12 text-center space-y-4">
           <p className="text-xs text-slate-400 font-light tracking-wide">
-            Don&apos;t have an account? <button onClick={() => router.push('/signup')} className="text-slate-900 hover:text-orange-500 transition-colors">Sign up</button>
+            {t[lang].noAccount} <button onClick={() => router.push('/signup')} className="text-slate-900 hover:text-orange-500 transition-colors">{t[lang].signUp}</button>
           </p>
           <p className="text-xs text-slate-400 font-light tracking-wide">
-            Need help? <a href="#" className="text-slate-900 hover:text-orange-500 transition-colors">Contact Support</a>
+            {t[lang].needHelp} <a href="#" className="text-slate-900 hover:text-orange-500 transition-colors">{t[lang].contactSupport}</a>
           </p>
         </div>
       </motion.div>
