@@ -78,14 +78,21 @@ export default function EntryFormTab() {
   const currentUser = auth.currentUser;
 
   const canEditAll = ['admin', 'president', 'secretary'].includes(userRole || '');
-  const canEditCarOnly = ['head_scrutineer', 'scrutineer_staff'].includes(userRole || '');
+  const canEditCarOnly = ['head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'].includes(userRole || '');
   const canEditOwn = userRole === 'competitor' || userRole === 'user';
   const [editingId, setEditingId] = useState<number | null>(null);
   const isOwnDoc = editingId ? (entries.find(e => e.id === editingId)?.userId === currentUser?.uid) : true;
   
   const canEditField = (field: string) => {
     if (canEditAll) return true;
-    if (canEditOwn && isOwnDoc) return true;
+    if (canEditOwn && isOwnDoc) {
+      if (editingId) {
+        // When editing an existing entry, competitor can only edit specific fields
+        const allowedEditFields = ['bloodType', 'emergencyContactName', 'emergencyContactPhone', 'emergencyContactRelation'];
+        return allowedEditFields.includes(field);
+      }
+      return true; // Can edit all fields when creating new
+    }
     if (canEditCarOnly) {
       const carFields = ['carManufacturer', 'model', 'engineDisplacement', 'engineCode', 'transmission', 'drivetrain', 'gearShiftPattern', 'autoGearMoreThan6', 'paddleShift'];
       return carFields.includes(field);
@@ -302,6 +309,10 @@ export default function EntryFormTab() {
       (yearFilter === '' || (entry.formData?.eventYear || '').toLowerCase() === yearFilter.toLowerCase())
     );
 
+    if (userRole === 'competitor' || userRole === 'user') {
+      filtered = filtered.filter(entry => entry.userId === currentUser?.uid);
+    }
+
     if (sortConfig !== null) {
       filtered.sort((a, b) => {
         if (a[sortConfig.key] < b[sortConfig.key]) {
@@ -314,7 +325,7 @@ export default function EntryFormTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, entries, activeTab, eventFilter, yearFilter]);
+  }, [search, sortConfig, entries, activeTab, eventFilter, yearFilter, currentUser?.uid, userRole]);
 
   // Import / Export Handlers
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {

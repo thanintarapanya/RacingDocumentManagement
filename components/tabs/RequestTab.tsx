@@ -18,7 +18,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc, deleteDoc, where } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -56,6 +56,8 @@ interface RequestItem {
   requestPermissionTopic?: string;
   requestPermissionDetail?: string;
   remark?: string;
+  fineAmount?: number;
+  penalty?: string;
   secretarySignName?: string;
   secretarySignDate?: string;
 
@@ -133,6 +135,8 @@ export default function RequestTab() {
     requestPermissionTopic: '',
     requestPermissionDetail: '',
     remark: '',
+    fineAmount: 0,
+    penalty: '',
     secretarySignName: '',
     secretarySignDate: '',
     requireChairmanApproval: false,
@@ -208,12 +212,20 @@ export default function RequestTab() {
   useEffect(() => {
     if (!auth.currentUser) return;
 
-    const q = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
+    let q;
+    if (userRole === 'competitor') {
+      q = query(collection(db, 'requests'), where('userId', '==', auth.currentUser.uid));
+    } else {
+      q = query(collection(db, 'requests'));
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedRequests = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as RequestItem[];
+      
+      fetchedRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
       setRequests(fetchedRequests);
       setIsLoading(false);
@@ -223,7 +235,7 @@ export default function RequestTab() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [userRole]);
 
   const requestSort = (key: keyof RequestItem) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -250,6 +262,10 @@ export default function RequestTab() {
       );
     });
 
+    if (userRole === 'competitor' || userRole === 'user') {
+      filtered = filtered.filter(req => req.userId === currentUser?.uid);
+    }
+
     if (sortConfig !== null) {
       filtered.sort((a, b) => {
         const aValue = a[sortConfig.key] || '';
@@ -261,7 +277,7 @@ export default function RequestTab() {
     }
 
     return filtered;
-  }, [requests, search, sortConfig, activeTabFilter, eventFilter, yearFilter]);
+  }, [requests, search, sortConfig, activeTabFilter, eventFilter, yearFilter, userRole, currentUser?.uid]);
 
   const handleApprove = () => {
     setShowApproveConfirm(true);
@@ -482,6 +498,8 @@ export default function RequestTab() {
       requestPermissionTopic: req.requestPermissionTopic || req.type || '',
       requestPermissionDetail: req.requestPermissionDetail || req.desc || '',
       remark: req.remark || '',
+      fineAmount: req.fineAmount || 0,
+      penalty: req.penalty || '',
       requireChairmanApproval: req.requireChairmanApproval || false,
       requireStewardApproval: req.requireStewardApproval || false,
       requireChiefInspectionApproval: req.requireChiefInspectionApproval || false,
@@ -523,6 +541,8 @@ export default function RequestTab() {
       requestPermissionTopic: req.requestPermissionTopic || req.type || '',
       requestPermissionDetail: req.requestPermissionDetail || req.desc || '',
       remark: req.remark || '',
+      fineAmount: req.fineAmount || 0,
+      penalty: req.penalty || '',
       requireChairmanApproval: req.requireChairmanApproval || false,
       requireStewardApproval: req.requireStewardApproval || false,
       requireChiefInspectionApproval: req.requireChiefInspectionApproval || false,
@@ -883,6 +903,26 @@ export default function RequestTab() {
             {(canSignSecretary || canEditAll) && (
               <>
                 <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-700">Penalty</span>
+                  <input 
+                    type="text" 
+                    placeholder="Penalty details" 
+                    value={newRequest.penalty}
+                    onChange={(e) => setNewRequest({...newRequest, penalty: e.target.value})}
+                    className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 w-48"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-700">Fine Amount</span>
+                  <input 
+                    type="number" 
+                    placeholder="Amount" 
+                    value={newRequest.fineAmount || ''}
+                    onChange={(e) => setNewRequest({...newRequest, fineAmount: Number(e.target.value)})}
+                    className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 w-32"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-slate-700">Secretary Comment <span className="text-rose-500">*</span></span>
                   <input 
                     type="text" 
@@ -1102,8 +1142,13 @@ export default function RequestTab() {
               </div>
 
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Date of Finepaid</div>
-                <div className="text-sm text-slate-900">-</div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Penalty</div>
+                <div className="text-sm text-slate-900">{newRequest.penalty || '-'}</div>
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Fine Amount</div>
+                <div className="text-sm text-slate-900">{newRequest.fineAmount ? `${newRequest.fineAmount} THB` : '-'}</div>
               </div>
             </div>
           </div>

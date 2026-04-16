@@ -75,8 +75,10 @@ service cloud.firestore {
     function isValidUser(data) {
       return hasRequiredFields(['email', 'role', 'createdAt']) &&
              data.email is string && (data.email == "" || isValidEmail(data.email)) &&
-             data.role in ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'steward', 'competitor'] &&
-             data.createdAt is string;
+             data.role in ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward', 'competitor'] &&
+             data.createdAt is string &&
+             (!('displayName' in data) || data.displayName is string) &&
+             (!('phoneNumber' in data) || data.phoneNumber is string);
     }
 
     function isValidChecklist(data) {
@@ -154,6 +156,8 @@ service cloud.firestore {
              data.requestPermissionTopic is string &&
              data.requestPermissionDetail is string &&
              (!('remark' in data) || data.remark is string) &&
+             (!('fineAmount' in data) || data.fineAmount is number) &&
+             (!('penalty' in data) || data.penalty is string) &&
              data.status is string &&
              data.userId is string &&
              data.createdAt is string &&
@@ -169,14 +173,14 @@ service cloud.firestore {
     // ===============================================================
     
     match /entries/{entryId} {
-      allow read: if isAuthenticated();
+      allow read: if isDocOwner() || hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']);
       allow create: if hasRole(['admin', 'secretary', 'competitor']) && isValidEntry(request.resource.data) && uidUnchanged();
-      allow update: if isAuthenticated() && isValidEntry(request.resource.data) && uidNotModified() && (isDocOwner() || hasRole(['admin', 'secretary', 'head_scrutineer', 'scrutineer_staff'])) && request.resource.data.createdAt == resource.data.createdAt;
+      allow update: if isAuthenticated() && isValidEntry(request.resource.data) && uidNotModified() && (isDocOwner() || hasRole(['admin', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'])) && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if hasRole(['admin', 'secretary']) || (isDocOwner() && hasRole(['competitor']));
     }
 
     match /deletedItems/{itemId} {
-      allow read: if isAuthenticated();
+      allow read: if isDocOwner() || hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']);
       allow create: if isAuthenticated() && isValidDeletedItem(request.resource.data) && uidUnchanged();
       allow update: if isAuthenticated() && isValidDeletedItem(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin());
       allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
@@ -186,7 +190,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (isOwner(userId) || hasRole(['admin', 'president', 'secretary']));
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role in ['competitor']) || hasRole(['admin', 'president', 'secretary']));
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == resource.data.role) || hasRole(['admin', 'president', 'secretary'])) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if hasRole(['admin', 'president', 'secretary']);
+      allow delete: if isOwner(userId) || hasRole(['admin', 'president', 'secretary']);
     }
 
     match /invitations/{inviteId} {
@@ -197,9 +201,9 @@ service cloud.firestore {
     }
 
     match /checklists/{checklistId} {
-      allow read: if isAuthenticated();
-      allow create: if hasRole(['admin', 'secretary']) && isValidChecklist(request.resource.data);
-      allow update: if hasRole(['admin', 'secretary']) && isValidChecklist(request.resource.data);
+      allow read: if hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']);
+      allow create: if hasRole(['admin', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer']) && isValidChecklist(request.resource.data);
+      allow update: if hasRole(['admin', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer']) && isValidChecklist(request.resource.data);
       allow delete: if hasRole(['admin', 'secretary']);
     }
 
@@ -211,30 +215,30 @@ service cloud.firestore {
     }
 
     match /car_inspections/{inspectionId} {
-      allow read: if isAuthenticated();
-      allow create: if hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'competitor']) && isValidCarInspection(request.resource.data) && uidUnchanged();
-      allow update: if (hasRole(['admin', 'head_scrutineer', 'scrutineer_staff']) || (isDocOwner() && hasRole(['competitor']))) && isValidCarInspection(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
+      allow read: if isDocOwner() || hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']);
+      allow create: if hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'competitor']) && isValidCarInspection(request.resource.data) && uidUnchanged();
+      allow update: if (hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer']) || (isDocOwner() && hasRole(['competitor']))) && isValidCarInspection(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if hasRole(['admin', 'head_scrutineer']);
     }
 
     match /inspections/{inspectionId} {
-      allow read: if isAuthenticated();
-      allow create: if hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'competitor']) && isValidInspection(request.resource.data) && uidUnchanged();
-      allow update: if (hasRole(['admin', 'head_scrutineer', 'scrutineer_staff']) || (isDocOwner() && hasRole(['competitor']))) && isValidInspection(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
+      allow read: if isDocOwner() || hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']);
+      allow create: if hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'competitor']) && isValidInspection(request.resource.data) && uidUnchanged();
+      allow update: if (hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer']) || (isDocOwner() && hasRole(['competitor']))) && isValidInspection(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if hasRole(['admin', 'head_scrutineer']);
     }
 
     match /reports/{reportId} {
-      allow read: if isAuthenticated();
+      allow read: if hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']);
       allow create: if hasRole(['admin', 'head_scrutineer']) && isValidReport(request.resource.data) && uidUnchanged();
       allow update: if hasRole(['admin', 'head_scrutineer']) && isValidReport(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if hasRole(['admin', 'head_scrutineer']);
     }
 
     match /requests/{requestId} {
-      allow read: if hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'steward']) || isDocOwner();
+      allow read: if hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']) || isDocOwner();
       allow create: if hasRole(['admin', 'secretary', 'competitor']) && isValidRequest(request.resource.data) && uidUnchanged();
-      allow update: if (hasRole(['admin', 'secretary', 'president', 'head_scrutineer', 'steward']) || (isDocOwner() && hasRole(['competitor']))) && isValidRequest(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
+      allow update: if (hasRole(['admin', 'secretary', 'president', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']) || (isDocOwner() && hasRole(['competitor']))) && isValidRequest(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if hasRole(['admin', 'secretary']) || (isDocOwner() && hasRole(['competitor']));
     }
   }

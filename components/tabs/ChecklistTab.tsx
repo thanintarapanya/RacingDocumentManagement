@@ -86,7 +86,8 @@ export default function ChecklistTab() {
   const [logModalEntryId, setLogModalEntryId] = useState<number | null>(null);
 
   const userRole = useAppStore(state => state.userRole);
-  const canEdit = ['admin', 'president', 'secretary'].includes(userRole || '');
+  const canManageTopics = ['admin', 'president', 'secretary'].includes(userRole || '');
+  const canEditChecklist = ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'].includes(userRole || '');
 
   // Topics Management
   const [topics, setTopics] = useState<string[]>(['Track Day Check']);
@@ -437,7 +438,7 @@ export default function ChecklistTab() {
                   <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-center">
                     LOGS
                   </th>
-                  {canEdit && (
+                  {canManageTopics && (
                     <th className="px-6 py-5 border-b border-slate-100 w-16 text-right">
                       <button 
                         onClick={() => setIsManageTopicsOpen(true)}
@@ -455,7 +456,7 @@ export default function ChecklistTab() {
                   {groupedEntries.map((group) => (
                     <Fragment key={group.category}>
                       <tr className="bg-slate-50/80 border-y border-slate-100">
-                        <td colSpan={7 + topics.length + (canEdit ? 1 : 0)} className="px-6 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        <td colSpan={7 + topics.length + (canManageTopics ? 1 : 0)} className="px-6 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
                           {group.category} <span className="text-slate-400 font-normal ml-2">({group.entries.length})</span>
                         </td>
                       </tr>
@@ -500,8 +501,8 @@ export default function ChecklistTab() {
                                   type="checkbox"
                                   checked={isChecked}
                                   onChange={(e) => handleToggleCheck(entry.id, topic, e.target.checked)}
-                                  disabled={!canEdit}
-                                  className={`w-5 h-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 bg-slate-50 ${!canEdit ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                                  disabled={!canEditChecklist}
+                                  className={`w-5 h-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 bg-slate-50 ${!canEditChecklist ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                                 />
                                 {isChecked && topicData.timestamp && (
                                   <span className="text-[10px] text-slate-400 whitespace-nowrap">
@@ -524,7 +525,7 @@ export default function ChecklistTab() {
                             <History className="w-4 h-4" />
                           </button>
                         </td>
-                        {canEdit && <td className="px-6 py-5"></td>}
+                        {canManageTopics && <td className="px-6 py-5"></td>}
                           </motion.tr>
                         );
                       })}
@@ -534,7 +535,7 @@ export default function ChecklistTab() {
                 
                 {sortedAndFilteredEntries.length === 0 && (
                   <tr>
-                    <td colSpan={7 + topics.length + (canEdit ? 1 : 0)} className="px-6 py-12 text-center text-slate-500 font-light">
+                    <td colSpan={7 + topics.length + (canManageTopics ? 1 : 0)} className="px-6 py-12 text-center text-slate-500 font-light">
                       No candidates found.
                     </td>
                   </tr>

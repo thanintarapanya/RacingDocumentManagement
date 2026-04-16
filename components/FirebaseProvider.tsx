@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '@/firebase';
 import { useAppStore, Entry, DeletedItem } from '@/lib/store';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
@@ -94,10 +94,22 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribeAuth();
   }, [router, setUserRole]);
 
+  const userRole = useAppStore((state) => state.userRole);
+
   useEffect(() => {
     if (!isAuthReady || !auth.currentUser) return;
 
-    const entriesQuery = query(collection(db, 'entries'), orderBy('createdAt', 'desc'));
+    let entriesQuery;
+    let deletedItemsQuery;
+    
+    if (userRole === 'competitor') {
+      entriesQuery = query(collection(db, 'entries'), where('userId', '==', auth.currentUser.uid));
+      deletedItemsQuery = query(collection(db, 'deletedItems'), where('userId', '==', auth.currentUser.uid));
+    } else {
+      entriesQuery = query(collection(db, 'entries'));
+      deletedItemsQuery = query(collection(db, 'deletedItems'));
+    }
+
     const unsubscribeEntries = onSnapshot(
       entriesQuery,
       (snapshot) => {
@@ -114,7 +126,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
             id: Number(doc.id),
             formData: parsedFormData
           } as Entry;
-        });
+        }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setEntries(entriesData);
       },
       (error) => {
@@ -122,7 +134,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    const deletedItemsQuery = query(collection(db, 'deletedItems'), orderBy('deletedAt', 'desc'));
     const unsubscribeDeletedItems = onSnapshot(
       deletedItemsQuery,
       (snapshot) => {
@@ -139,7 +150,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
             id: doc.id,
             originalData: parsedOriginalData
           } as DeletedItem;
-        });
+        }).sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
         setDeletedItems(deletedData);
       },
       (error) => {
@@ -151,7 +162,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       unsubscribeEntries();
       unsubscribeDeletedItems();
     };
-  }, [isAuthReady, setEntries, setDeletedItems]);
+  }, [isAuthReady, setEntries, setDeletedItems, userRole]);
 
   if (!isAuthReady) {
     return (

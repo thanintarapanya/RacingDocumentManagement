@@ -20,36 +20,52 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { useAppStore } from '@/lib/store';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db, auth } from '@/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 
 export default function DashboardTab() {
-  const { entries } = useAppStore();
+  const { entries, userRole } = useAppStore();
   
   const [requests, setRequests] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [inspections, setInspections] = useState<any[]>([]);
 
   useEffect(() => {
-    const unsubRequests = onSnapshot(collection(db, 'requests'), (snapshot) => {
+    if (!auth.currentUser) return;
+
+    let requestsQuery;
+    let inspectionsQuery;
+
+    if (userRole === 'competitor') {
+      requestsQuery = query(collection(db, 'requests'), where('userId', '==', auth.currentUser.uid));
+      inspectionsQuery = query(collection(db, 'car_inspections'), where('userId', '==', auth.currentUser.uid));
+    } else {
+      requestsQuery = query(collection(db, 'requests'));
+      inspectionsQuery = query(collection(db, 'car_inspections'));
+    }
+
+    const unsubRequests = onSnapshot(requestsQuery, (snapshot) => {
       setRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'requests'));
 
-    const unsubReports = onSnapshot(collection(db, 'reports'), (snapshot) => {
-      setReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'reports'));
-
-    const unsubInspections = onSnapshot(collection(db, 'car_inspections'), (snapshot) => {
+    const unsubInspections = onSnapshot(inspectionsQuery, (snapshot) => {
       setInspections(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'car_inspections'));
+
+    let unsubReports = () => {};
+    if (userRole !== 'competitor') {
+      unsubReports = onSnapshot(collection(db, 'reports'), (snapshot) => {
+        setReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'reports'));
+    }
 
     return () => {
       unsubRequests();
       unsubReports();
       unsubInspections();
     };
-  }, []);
+  }, [userRole]);
 
   const [now, setNow] = useState<number>(0);
 

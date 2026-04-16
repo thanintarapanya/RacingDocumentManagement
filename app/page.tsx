@@ -63,13 +63,13 @@ export default function Home() {
     switch (userRole) {
       case 'admin':
       case 'president':
-        return TABS;
       case 'secretary':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request', 'settings'].includes(t.id));
+        return TABS;
       case 'head_scrutineer':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'report', 'request', 'settings'].includes(t.id));
       case 'scrutineer_staff':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'report', 'settings'].includes(t.id));
+      case 'offsite_scrutineer':
+      case 'steward':
+        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request', 'settings'].includes(t.id));
       case 'competitor':
         return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'request', 'settings'].includes(t.id));
       default:

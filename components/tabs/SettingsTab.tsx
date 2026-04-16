@@ -15,8 +15,12 @@ import {
   Copy, 
   CheckCircle2, 
   Trash2,
-  Plus
+  Plus,
+  UserCircle,
+  Lock
 } from 'lucide-react';
+import AccountSettings from './settings/AccountSettings';
+import PrivacySettings from './settings/PrivacySettings';
 
 const ROLES = [
   'admin',
@@ -24,6 +28,7 @@ const ROLES = [
   'secretary',
   'head_scrutineer',
   'scrutineer_staff',
+  'offsite_scrutineer',
   'steward',
   'competitor'
 ];
@@ -46,7 +51,7 @@ interface Invitation {
 
 export default function SettingsTab() {
   const userRole = useAppStore(state => state.userRole);
-  const [activeSubTab, setActiveSubTab] = useState('users');
+  const [activeSubTab, setActiveSubTab] = useState('account');
   
   // Users State
   const [users, setUsers] = useState<User[]>([]);
@@ -132,21 +137,13 @@ export default function SettingsTab() {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (user.displayName && user.displayName.toLowerCase().includes(searchQuery.toLowerCase()));
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = searchQuery === '' || 
+                          (user.email && user.email.toLowerCase().includes(searchLower)) || 
+                          (user.displayName && user.displayName.toLowerCase().includes(searchLower));
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     return matchesSearch && matchesRole;
   });
-
-  if (!canManageUsers) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-500">
-        <Shield className="w-12 h-12 mb-4 text-slate-300" />
-        <h2 className="text-xl font-medium text-slate-700">Access Denied</h2>
-        <p className="text-sm mt-2">You do not have permission to view settings.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="h-full flex flex-col max-w-[1400px] mx-auto">
@@ -160,23 +157,48 @@ export default function SettingsTab() {
         <div className="w-64 flex-shrink-0 border-r border-slate-200 pr-6">
           <nav className="space-y-1">
             <button
-              onClick={() => setActiveSubTab('users')}
+              onClick={() => setActiveSubTab('account')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                activeSubTab === 'users' 
+                activeSubTab === 'account' 
                   ? 'bg-orange-50 text-orange-600' 
                   : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <Users className="w-5 h-5" />
-              User & Role
+              <UserCircle className="w-5 h-5" />
+              Account
             </button>
-            {/* Add more settings tabs here in the future */}
+            <button
+              onClick={() => setActiveSubTab('privacy')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                activeSubTab === 'privacy' 
+                  ? 'bg-orange-50 text-orange-600' 
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Lock className="w-5 h-5" />
+              Privacy
+            </button>
+            {canManageUsers && (
+              <button
+                onClick={() => setActiveSubTab('users')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                  activeSubTab === 'users' 
+                    ? 'bg-orange-50 text-orange-600' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Users className="w-5 h-5" />
+                User & Role
+              </button>
+            )}
           </nav>
         </div>
 
         {/* Settings Content */}
         <div className="flex-1 overflow-y-auto pb-12 pr-4 scrollbar-hide">
-          {activeSubTab === 'users' && (
+          {activeSubTab === 'account' && <AccountSettings />}
+          {activeSubTab === 'privacy' && <PrivacySettings />}
+          {activeSubTab === 'users' && canManageUsers && (
             <div className="space-y-8">
               {/* Header Actions */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

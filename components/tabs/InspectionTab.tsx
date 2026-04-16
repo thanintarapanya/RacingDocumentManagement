@@ -25,7 +25,7 @@ const SERIES_CATEGORIES = [
   'ISUZU Challenge Thailand'
 ];
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
 
@@ -96,6 +96,7 @@ const initialFormData = {
   transmission: '',
   drivetrain: '',
   gearShiftPattern: '',
+  isOffsiteInspection: false,
   autoGearMoreThan6: false,
   paddleShift: false,
   engineCapacityWeight: {} as Record<string, { checked: boolean, weight: string, committeeWeight: string }>,
@@ -191,9 +192,22 @@ export default function InspectionTab() {
   const userRole = useAppStore(state => state.userRole);
   const currentUser = auth.currentUser;
 
-  const canEditAll = ['admin', 'president', 'head_scrutineer', 'scrutineer_staff'].includes(userRole || '');
+  const canEditAll = ['admin', 'president', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'].includes(userRole || '');
   const canEditOwn = userRole === 'competitor' || userRole === 'user';
   const isOwnDoc = editingId ? (inspections.find(i => i.id === editingId)?.userId === currentUser?.uid) : true;
+  
+  const canEditField = (field: string) => {
+    if (canEditAll) return true;
+    if (canEditOwn && isOwnDoc) {
+      if (editingId) {
+        const allowedEditFields = ['driverName', 'carNumber', 'series', 'teamName'];
+        return allowedEditFields.includes(field);
+      }
+      return true;
+    }
+    return false;
+  };
+  
   const canEdit = canEditAll || (canEditOwn && isOwnDoc);
 
   useEffect(() => {
@@ -271,12 +285,21 @@ export default function InspectionTab() {
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'car_inspections'), orderBy('createdAt', 'desc'));
+    if (!auth.currentUser) return;
+    
+    let q;
+    if (userRole === 'competitor') {
+      q = query(collection(db, 'car_inspections'), where('userId', '==', auth.currentUser.uid));
+    } else {
+      q = query(collection(db, 'car_inspections'));
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data: Inspection[] = [];
       snapshot.forEach((doc) => {
         data.push({ id: doc.id, ...doc.data() } as Inspection);
       });
+      data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setInspections(data);
       setIsLoading(false);
     }, (error) => {
@@ -285,7 +308,7 @@ export default function InspectionTab() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [userRole]);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => {
@@ -410,6 +433,10 @@ export default function InspectionTab() {
       (yearFilter === '' || (item.formData?.eventYear || '').toLowerCase() === yearFilter.toLowerCase())
     );
 
+    if (userRole === 'competitor' || userRole === 'user') {
+      filtered = filtered.filter(item => item.userId === currentUser?.uid);
+    }
+
     if (sortConfig !== null) {
       filtered.sort((a, b) => {
         const aVal = a[sortConfig.key] || '';
@@ -424,7 +451,7 @@ export default function InspectionTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, inspections, activeTab, eventFilter, yearFilter]);
+  }, [search, sortConfig, inspections, activeTab, eventFilter, yearFilter, currentUser?.uid, userRole]);
 
   const renderSelect = (label: string, field: string, options: string[], className = '') => {
     const keys = field.split('.');
@@ -441,7 +468,7 @@ export default function InspectionTab() {
             value={value || ''}
             onChange={(e) => handleChange(field, e.target.value)}
             className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
-            disabled={!canEdit}
+            disabled={!canEditField(field)}
           >
             <option value="" disabled>Select {label.split('/')[0].trim()}</option>
             {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -468,7 +495,7 @@ export default function InspectionTab() {
           onChange={(e) => handleChange(field, e.target.value)}
           className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
           placeholder={placeholder || label}
-          disabled={!canEdit}
+          disabled={!canEditField(field)}
         />
       </div>
     );
@@ -482,7 +509,7 @@ export default function InspectionTab() {
     }
     
     return (
-      <label className={`flex items-center gap-3 cursor-pointer group ${className} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}>
+      <label className={`flex items-center gap-3 cursor-pointer group ${className} ${!canEditField(field) ? 'opacity-60 cursor-not-allowed' : ''}`}>
         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${checked ? 'bg-orange-500 border-orange-500' : 'border-slate-300 group-hover:border-orange-400 bg-white'}`}>
           {checked && <Check className="w-3.5 h-3.5 text-white" />}
         </div>
@@ -492,7 +519,7 @@ export default function InspectionTab() {
           className="hidden"
           checked={!!checked}
           onChange={(e) => handleChange(field, e.target.checked)}
-          disabled={!canEdit}
+          disabled={!canEditField(field)}
         />
       </label>
     );
@@ -1044,6 +1071,12 @@ export default function InspectionTab() {
                     {renderInput('Racer Name / ชื่อนักแข่ง', 'racerName')}
                     {renderInput('Team Manager Name / ชื่อผู้จัดการทีม', 'teamManagerName')}
                   </div>
+                  
+                  {['admin', 'offsite_scrutineer'].includes(userRole || '') && (
+                    <div className="mt-6 p-4 bg-orange-50 border border-orange-100 rounded-xl">
+                      {renderCheckbox('Offsite Inspection / ตรวจสภาพนอกสถานที่', 'isOffsiteInspection')}
+                    </div>
+                  )}
                 </motion.div>
               )}
 
