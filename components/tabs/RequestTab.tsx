@@ -37,6 +37,7 @@ const SERIES_CATEGORIES = [
 interface RequestItem {
   id: string;
   event?: string;
+  eventYear?: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   createdAt?: string;
   updatedAt?: string;
