@@ -45,6 +45,7 @@ interface Report {
   id: string;
   stadium: string;
   event?: string;
+  eventYear?: string;
   reportSession: string;
   race: string;
   series: string;
