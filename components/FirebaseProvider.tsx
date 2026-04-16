@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/firebase';
 import { useAppStore, Entry, DeletedItem } from '@/lib/store';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
@@ -22,16 +22,47 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         try {
           const userDocRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            setUserRole(userDoc.data().role);
-          } else {
-            // Default role if not found
+          
+          let roleToAssign = 'competitor';
+          let isNewUser = !userDoc.exists();
+          
+          // Use window.location to avoid Next.js SSR issues with useSearchParams in layout
+          const searchParams = new URLSearchParams(window.location.search);
+          const inviteId = searchParams.get('invite');
+
+          if (isNewUser) {
             if (user.email === 'info@embeddedlinuxgroup.com') {
-              setUserRole('admin');
-              await setDoc(userDocRef, { email: user.email, role: 'admin', createdAt: new Date().toISOString() });
+              roleToAssign = 'admin';
+            } else if (inviteId) {
+              // Check if invite is valid
+              const inviteDoc = await getDoc(doc(db, 'invitations', inviteId));
+              if (inviteDoc.exists() && !inviteDoc.data().used) {
+                roleToAssign = inviteDoc.data().role;
+                await updateDoc(doc(db, 'invitations', inviteId), { used: true });
+              }
+            }
+            
+            await setDoc(userDocRef, { 
+              email: user.email || '', 
+              displayName: user.displayName || '',
+              role: roleToAssign, 
+              createdAt: new Date().toISOString() 
+            });
+            setUserRole(roleToAssign);
+          } else {
+            // User exists, check if they are using a valid invite to upgrade role
+            if (inviteId) {
+              const inviteDoc = await getDoc(doc(db, 'invitations', inviteId));
+              if (inviteDoc.exists() && !inviteDoc.data().used) {
+                roleToAssign = inviteDoc.data().role;
+                await updateDoc(doc(db, 'invitations', inviteId), { used: true });
+                await updateDoc(userDocRef, { role: roleToAssign });
+                setUserRole(roleToAssign);
+              } else {
+                setUserRole(userDoc.data()?.role || 'competitor');
+              }
             } else {
-              setUserRole('competitor');
-              await setDoc(userDocRef, { email: user.email, role: 'competitor', createdAt: new Date().toISOString() });
+              setUserRole(userDoc.data()?.role || 'competitor');
             }
           }
         } catch (error) {
@@ -39,13 +70,13 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           setUserRole('competitor'); // Fallback
         }
         setIsAuthReady(true);
-        if (pathname === '/login') {
+        if (pathname === '/login' || pathname === '/signup') {
           router.push('/');
         }
       } else {
         setUserRole(null);
         setIsAuthReady(true);
-        if (pathname !== '/login') {
+        if (pathname !== '/login' && pathname !== '/signup') {
           router.push('/login');
         }
       }

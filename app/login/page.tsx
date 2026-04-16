@@ -63,9 +63,12 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-16 text-center">
+        <div className="mt-16 text-center space-y-4">
           <p className="text-xs text-slate-400 font-light tracking-wide">
-            Don&apos;t have an account? <a href="#" className="text-slate-900 hover:text-orange-500 transition-colors">Contact Support</a>
+            Don&apos;t have an account? <button onClick={() => router.push('/signup')} className="text-slate-900 hover:text-orange-500 transition-colors">Sign up</button>
+          </p>
+          <p className="text-xs text-slate-400 font-light tracking-wide">
+            Need help? <a href="#" className="text-slate-900 hover:text-orange-500 transition-colors">Contact Support</a>
           </p>
         </div>
       </motion.div>

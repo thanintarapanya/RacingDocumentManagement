@@ -183,10 +183,17 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin() || isSuperAdmin());
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role in ['competitor']) || isAdmin() || isSuperAdmin());
-      allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin() || isSuperAdmin()) && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAdmin() || isSuperAdmin();
+      allow read: if isAuthenticated() && (isOwner(userId) || hasRole(['admin', 'president', 'secretary']));
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role in ['competitor']) || hasRole(['admin', 'president', 'secretary']));
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role == resource.data.role) || hasRole(['admin', 'president', 'secretary'])) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if hasRole(['admin', 'president', 'secretary']);
+    }
+
+    match /invitations/{inviteId} {
+      allow read: if true; // Anyone can read an invitation to verify it
+      allow create: if hasRole(['admin', 'president', 'secretary']);
+      allow update: if isAuthenticated(); // Anyone can update to mark as used
+      allow delete: if hasRole(['admin', 'president', 'secretary']);
     }
 
     match /checklists/{checklistId} {

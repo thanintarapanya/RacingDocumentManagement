@@ -37,6 +37,8 @@ const ReportTab = dynamic(() => import('@/components/tabs/ReportTab'), { loading
 const RequestTab = dynamic(() => import('@/components/tabs/RequestTab'), { loading: LoadingFallback });
 const DeletedTab = dynamic(() => import('@/components/tabs/DeletedTab'), { loading: LoadingFallback });
 
+const SettingsTab = dynamic(() => import('@/components/tabs/SettingsTab'), { loading: LoadingFallback });
+
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, component: DashboardTab },
   { id: 'entry-form', label: 'Entry Form', icon: FileText, component: EntryFormTab },
@@ -45,6 +47,7 @@ const TABS = [
   { id: 'report', label: 'Scrutineering Report', icon: FileCheck, component: ReportTab },
   { id: 'request', label: 'Competitor Request', icon: MessageSquare, component: RequestTab },
   { id: 'deleted', label: 'Recently Deleted', icon: Trash2, component: DeletedTab },
+  { id: 'settings', label: 'Settings', icon: Settings, component: SettingsTab },
 ];
 
 export default function Home() {
@@ -60,15 +63,15 @@ export default function Home() {
       case 'president':
         return TABS;
       case 'secretary':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request', 'settings'].includes(t.id));
       case 'head_scrutineer':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'report', 'request'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'report', 'request', 'settings'].includes(t.id));
       case 'scrutineer_staff':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'report'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'report', 'settings'].includes(t.id));
       case 'competitor':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'request'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'request', 'settings'].includes(t.id));
       default:
-        return TABS.filter(t => ['dashboard'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'settings'].includes(t.id));
     }
   }, [userRole]);
 
@@ -116,7 +119,7 @@ export default function Home() {
 
         <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-y-auto py-4 flex flex-col gap-2 px-3" orientation="vertical">
           <Tabs.List className="flex flex-col gap-2" aria-orientation="vertical">
-            {availableTabs.map((tab) => (
+            {availableTabs.filter(t => t.id !== 'settings').map((tab) => (
               <Tabs.Trigger
                 key={tab.id}
                 value={tab.id}
@@ -148,8 +151,11 @@ export default function Home() {
 
         <div className="p-4 border-t border-slate-200 space-y-2">
           <RoleSwitcher isSidebarOpen={isSidebarOpen} />
-          <button className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors w-full">
-            <Settings className="w-5 h-5 flex-shrink-0" />
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full ${activeTab === 'settings' ? 'bg-slate-100 text-slate-900 shadow-[0_0_15px_rgba(249,115,22,0.1)] border border-slate-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+          >
+            <Settings className={`w-5 h-5 flex-shrink-0 ${activeTab === 'settings' ? 'text-orange-500' : ''}`} />
             <AnimatePresence>
               {isSidebarOpen && (
                 <motion.span 
