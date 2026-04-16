@@ -645,7 +645,7 @@ export default function ChecklistTab() {
               </div>
               
               <div className="overflow-y-auto flex-1 pr-2 scrollbar-hide">
-                {checklists[logModalEntryId]?.changelog?.length > 0 ? (
+                {logModalEntryId && checklists[logModalEntryId]?.changelog?.length > 0 ? (
                   <div className="space-y-4">
                     {[...checklists[logModalEntryId].changelog].reverse().map((log, idx) => (
                       <div key={idx} className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
