@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, query, orderBy, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/firebase';
@@ -10,7 +10,6 @@ import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 
 export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [isAuthReady, setIsAuthReady] = useState(false);
   const setEntries = useAppStore((state) => state.setEntries);
   const setDeletedItems = useAppStore((state) => state.setDeletedItems);
@@ -26,19 +25,21 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           let roleToAssign = 'competitor';
           let isNewUser = !userDoc.exists();
           
-          // Use window.location to avoid Next.js SSR issues with useSearchParams in layout
+          // Get inviteId dynamically to avoid dependency array issues
           const searchParams = new URLSearchParams(window.location.search);
-          const inviteId = searchParams.get('invite');
+          const urlInviteId = searchParams.get('invite');
+          const sessionInviteId = sessionStorage.getItem('pendingInvite');
+          const currentInviteId = urlInviteId || sessionInviteId;
 
           if (isNewUser) {
             if (user.email === 'info@embeddedlinuxgroup.com') {
               roleToAssign = 'admin';
-            } else if (inviteId) {
+            } else if (currentInviteId) {
               // Check if invite is valid
-              const inviteDoc = await getDoc(doc(db, 'invitations', inviteId));
+              const inviteDoc = await getDoc(doc(db, 'invitations', currentInviteId));
               if (inviteDoc.exists() && !inviteDoc.data().used) {
                 roleToAssign = inviteDoc.data().role;
-                await updateDoc(doc(db, 'invitations', inviteId), { used: true });
+                await updateDoc(doc(db, 'invitations', currentInviteId), { used: true });
               }
             }
             
@@ -51,11 +52,11 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
             setUserRole(roleToAssign);
           } else {
             // User exists, check if they are using a valid invite to upgrade role
-            if (inviteId) {
-              const inviteDoc = await getDoc(doc(db, 'invitations', inviteId));
+            if (currentInviteId) {
+              const inviteDoc = await getDoc(doc(db, 'invitations', currentInviteId));
               if (inviteDoc.exists() && !inviteDoc.data().used) {
                 roleToAssign = inviteDoc.data().role;
-                await updateDoc(doc(db, 'invitations', inviteId), { used: true });
+                await updateDoc(doc(db, 'invitations', currentInviteId), { used: true });
                 await updateDoc(userDocRef, { role: roleToAssign });
                 setUserRole(roleToAssign);
               } else {
@@ -65,25 +66,33 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
               setUserRole(userDoc.data()?.role || 'competitor');
             }
           }
+
+          if (currentInviteId) {
+            sessionStorage.removeItem('pendingInvite');
+          }
+
         } catch (error) {
           console.error("Error fetching user role:", error);
           setUserRole('competitor'); // Fallback
         }
         setIsAuthReady(true);
-        if (pathname === '/login' || pathname === '/signup') {
+        
+        const currentPath = window.location.pathname;
+        if (currentPath === '/login' || currentPath === '/signup') {
           router.push('/');
         }
       } else {
         setUserRole(null);
         setIsAuthReady(true);
-        if (pathname !== '/login' && pathname !== '/signup') {
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/login' && currentPath !== '/signup') {
           router.push('/login');
         }
       }
     });
 
     return () => unsubscribeAuth();
-  }, [pathname, router, setUserRole]);
+  }, [router, setUserRole]);
 
   useEffect(() => {
     if (!isAuthReady || !auth.currentUser) return;

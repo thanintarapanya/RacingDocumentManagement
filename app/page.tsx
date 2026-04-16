@@ -22,6 +22,8 @@ import {
 
 import { useAppStore } from '@/lib/store';
 import { RoleSwitcher } from '@/components/RoleSwitcher';
+import { auth } from '@/firebase';
+import { signOut } from 'firebase/auth';
 
 const LoadingFallback = () => (
   <div className="w-full h-full flex items-center justify-center">
@@ -171,7 +173,14 @@ export default function Home() {
             </AnimatePresence>
           </button>
           <button 
-            onClick={() => router.push('/login')}
+            onClick={async () => {
+              try {
+                await signOut(auth);
+                router.push('/login');
+              } catch (error) {
+                console.error('Error signing out:', error);
+              }
+            }}
             className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors w-full"
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />

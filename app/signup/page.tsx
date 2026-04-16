@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import { ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { auth, db } from '@/firebase';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 function SignupContent() {
@@ -13,7 +13,8 @@ function SignupContent() {
   const searchParams = useSearchParams();
   const inviteId = searchParams.get('invite');
   
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [isLoadingLine, setIsLoadingLine] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteValid, setInviteValid] = useState<boolean | null>(null);
   const [invitedRole, setInvitedRole] = useState<string | null>(null);
@@ -29,6 +30,7 @@ function SignupContent() {
         if (inviteDoc.exists() && !inviteDoc.data().used) {
           setInviteValid(true);
           setInvitedRole(inviteDoc.data().role);
+          sessionStorage.setItem('pendingInvite', inviteId);
         } else {
           setInviteValid(false);
           setError('This invitation link is invalid or has already been used.');
@@ -42,19 +44,35 @@ function SignupContent() {
     checkInvite();
   }, [inviteId]);
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleGoogleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsLoadingGoogle(true);
     setError(null);
     
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      // FirebaseProvider will handle the rest (invite verification, role assignment, and redirect)
+      // FirebaseProvider will handle the rest
     } catch (err: any) {
-      console.error('Signup error:', err);
-      setError(err.message || 'Failed to sign up');
-      setIsLoading(false);
+      console.error('Google signup error:', err);
+      setError(err.message || 'Failed to sign up with Google');
+      setIsLoadingGoogle(false);
+    }
+  };
+
+  const handleLineSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoadingLine(true);
+    setError(null);
+    
+    try {
+      const provider = new OAuthProvider('oidc.line');
+      await signInWithPopup(auth, provider);
+      // FirebaseProvider will handle the rest
+    } catch (err: any) {
+      console.error('LINE signup error:', err);
+      setError(err.message || 'Failed to sign up with LINE');
+      setIsLoadingLine(false);
     }
   };
 
@@ -95,7 +113,7 @@ function SignupContent() {
           </div>
         )}
 
-        <form onSubmit={handleSignup} className="space-y-6">
+        <div className="space-y-4">
           {!inviteId && error && (
             <div className="p-3 text-sm text-rose-500 bg-rose-50 border border-rose-100 rounded-xl text-center">
               {error}
@@ -103,11 +121,11 @@ function SignupContent() {
           )}
 
           <button 
-            type="submit"
-            disabled={isLoading || (inviteId !== null && inviteValid === false)}
+            onClick={handleGoogleSignup}
+            disabled={isLoadingGoogle || isLoadingLine || (inviteId !== null && inviteValid === false)}
             className="w-full flex items-center justify-center gap-3 py-4 bg-slate-900 hover:bg-black text-white rounded-full transition-all disabled:opacity-70 disabled:cursor-not-allowed font-light text-sm tracking-wide"
           >
-            {isLoading ? (
+            {isLoadingGoogle ? (
               <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
@@ -115,7 +133,21 @@ function SignupContent() {
               </>
             )}
           </button>
-        </form>
+
+          <button 
+            onClick={handleLineSignup}
+            disabled={isLoadingGoogle || isLoadingLine || (inviteId !== null && inviteValid === false)}
+            className="w-full flex items-center justify-center gap-3 py-4 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-full transition-all disabled:opacity-70 disabled:cursor-not-allowed font-medium text-sm tracking-wide"
+          >
+            {isLoadingLine ? (
+              <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                Sign up with LINE <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        </div>
 
         <div className="mt-12 text-center">
           <p className="text-xs text-slate-400 font-light tracking-wide">

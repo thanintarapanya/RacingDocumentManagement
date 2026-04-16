@@ -57,6 +57,7 @@ export default function SettingsTab() {
   // Invite State
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteRole, setInviteRole] = useState('competitor');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [generatedLink, setGeneratedLink] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -105,6 +106,12 @@ export default function SettingsTab() {
       await setDoc(doc(db, 'invitations', inviteId), newInvite);
       const link = `${window.location.origin}/signup?invite=${inviteId}`;
       setGeneratedLink(link);
+
+      if (inviteEmail) {
+        const subject = encodeURIComponent("You're invited to join RaceDoc");
+        const body = encodeURIComponent(`Hello,\n\nYou have been invited to join RaceDoc as a ${inviteRole.replace('_', ' ')}.\n\nPlease click the link below to sign up:\n${link}\n\nBest regards,\nRaceDoc Team`);
+        window.location.href = `mailto:${inviteEmail}?subject=${subject}&body=${body}`;
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'invitations');
     }
@@ -329,6 +336,17 @@ export default function SettingsTab() {
               {!generatedLink ? (
                 <div className="space-y-4">
                   <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address (Optional)</label>
+                    <input
+                      type="email"
+                      placeholder="user@example.com"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-50 transition-all"
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Assign Role</label>
                     <select
                       value={inviteRole}
@@ -355,7 +373,7 @@ export default function SettingsTab() {
                       className="flex-1 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
                     >
                       <Mail className="w-4 h-4" />
-                      Generate Link
+                      {inviteEmail ? 'Generate & Send' : 'Generate Link'}
                     </button>
                   </div>
                 </div>
