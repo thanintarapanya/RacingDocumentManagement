@@ -1059,20 +1059,30 @@ export default function InspectionTab() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="space-y-8"
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderInput('Inspection Date / วันที่ตรวจสภาพ', 'inspectionDate', 'date')}
-                    {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
-                    {renderSelect('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
-                    {renderSelect('Grades / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
-                    {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3', '4', '5'])}
-                    {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
-                    {renderInput('Car Number / หมายเลขรถ', 'carNumber')}
-                    {renderInput('Team Name / ชื่อทีม', 'teamName')}
-                    {renderInput('Racer Name / ชื่อนักแข่ง', 'racerName')}
-                    {renderInput('Team Manager Name / ชื่อผู้จัดการทีม', 'teamManagerName')}
+                  {/* Auto-fill Identifiers */}
+                  <div>
+                    <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Auto-fill Identifiers</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                      {renderSelect('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
+                      {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3', '4', '5'])}
+                      {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
+                      {renderInput('Car Number / หมายเลขรถ', 'carNumber')}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Inspection Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {renderInput('Inspection Date / วันที่ตรวจสภาพ', 'inspectionDate', 'date')}
+                      {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
+                      {renderSelect('Grades / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
+                      {renderInput('Team Name / ชื่อทีม', 'teamName')}
+                      {renderInput('Racer Name / ชื่อนักแข่ง', 'racerName')}
+                      {renderInput('Team Manager Name / ชื่อผู้จัดการทีม', 'teamManagerName')}
+                    </div>
                   </div>
                   
-                  {['admin', 'offsite_scrutineer'].includes(userRole || '') && (
+                  {userRole === 'offsite_scrutineer' && (
                     <div className="mt-6 p-4 bg-orange-50 border border-orange-100 rounded-xl">
                       {renderCheckbox('Offsite Inspection / ตรวจสภาพนอกสถานที่', 'isOffsiteInspection')}
                     </div>

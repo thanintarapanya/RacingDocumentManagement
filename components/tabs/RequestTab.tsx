@@ -1495,20 +1495,24 @@ export default function RequestTab() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="space-y-10"
                 >
-                {/* Race Information */}
+                {/* Auto-fill Identifiers */}
                 <div>
-                  <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Race Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Auto-fill Identifiers</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                     <div className="space-y-2">
-                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Race / เรซ</label>
-                      <input 
-                        type="text"
-                        value={newRequest.race}
-                        onChange={(e) => setNewRequest({...newRequest, race: e.target.value})}
-                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                        placeholder="Race"
-                        disabled={viewMode || !canEdit}
-                      />
+                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Series / รุ่นการแข่งขัน</label>
+                      <div className="relative">
+                        <select 
+                          value={newRequest.series || ''}
+                          onChange={(e) => setNewRequest({...newRequest, series: e.target.value})}
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
+                          disabled={viewMode || !canEdit}
+                        >
+                          <option value="" disabled></option>
+                          {SERIES_CATEGORIES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Event / งานแข่งขัน</label>
@@ -1549,6 +1553,35 @@ export default function RequestTab() {
                       </div>
                     </div>
                     <div className="space-y-2">
+                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Car Number / หมายเลขรถ</label>
+                      <input 
+                        type="text"
+                        placeholder="Car Number"
+                        value={newRequest.carNumber || ''}
+                        onChange={(e) => setNewRequest({...newRequest, carNumber: e.target.value})}
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                        disabled={viewMode || !canEdit}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Race Information */}
+                <div>
+                  <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Race Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Race / เรซ</label>
+                      <input 
+                        type="text"
+                        value={newRequest.race}
+                        onChange={(e) => setNewRequest({...newRequest, race: e.target.value})}
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                        placeholder="Race"
+                        disabled={viewMode || !canEdit}
+                      />
+                    </div>
+                    <div className="space-y-2">
                       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Circuit / สนามแข่งขัน</label>
                       <div className="relative">
                         <select 
@@ -1570,7 +1603,7 @@ export default function RequestTab() {
                 {/* Driver Information */}
                 <div>
                   <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Driver Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-6">
                     <div className="space-y-2">
                       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Name / ชื่อนักแข่ง</label>
                       <input 
@@ -1581,32 +1614,6 @@ export default function RequestTab() {
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
                         disabled={viewMode || !canEdit}
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Car Number / หมายเลขรถ</label>
-                      <input 
-                        type="text"
-                        placeholder="Car Number"
-                        value={newRequest.carNumber}
-                        onChange={(e) => setNewRequest({...newRequest, carNumber: e.target.value})}
-                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                        disabled={viewMode || !canEdit}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Series / รุ่นการแข่งขัน</label>
-                      <div className="relative">
-                        <select 
-                          value={newRequest.series}
-                          onChange={(e) => setNewRequest({...newRequest, series: e.target.value})}
-                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
-                          disabled={viewMode || !canEdit}
-                        >
-                          <option value="" disabled></option>
-                          {SERIES_CATEGORIES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                        </select>
-                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
