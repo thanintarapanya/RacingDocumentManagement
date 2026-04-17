@@ -225,7 +225,7 @@ export default function RequestTab() {
         ...doc.data()
       })) as RequestItem[];
       
-      fetchedRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      fetchedRequests.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       
       setRequests(fetchedRequests);
       setIsLoading(false);

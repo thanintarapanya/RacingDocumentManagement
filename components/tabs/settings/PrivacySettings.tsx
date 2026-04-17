@@ -5,6 +5,12 @@ import { auth } from '@/firebase';
 import { updatePassword, multiFactor, PhoneAuthProvider, PhoneMultiFactorGenerator, RecaptchaVerifier } from 'firebase/auth';
 import { Lock, Smartphone, Loader2, ShieldCheck } from 'lucide-react';
 
+declare global {
+  interface Window {
+    recaptchaVerifier: any;
+  }
+}
+
 export default function PrivacySettings() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
