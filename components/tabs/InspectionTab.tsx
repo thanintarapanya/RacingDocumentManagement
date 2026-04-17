@@ -28,6 +28,7 @@ import { db, auth } from '@/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
+import { weightPresets } from './weightPresets';
 
 type Inspection = {
   id: string;
@@ -136,7 +137,17 @@ const initialFormData = {
   changeSeal: 'Not Change Seal',
   currentEngineSealNumber: '',
   newEngineSealNumber: '',
-  reasonForChangingSeal: ''
+  reasonForChangingSeal: '',
+
+  // Step 3: Weight
+  baseWeight: 0,
+  dynamicWeights: [] as Array<{
+    id: string;
+    title: string;
+    condition: string;
+    weight: number;
+    isChecked: boolean;
+  }>
 };
 
 export default function InspectionTab() {
@@ -150,7 +161,7 @@ export default function InspectionTab() {
   
   // Form Wizard States
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 5;
+  const totalSteps = 6;
   
   // List View States
   const [search, setSearch] = useState('');
@@ -1027,13 +1038,13 @@ export default function InspectionTab() {
           {/* Stepper */}
           <div className="mb-12">
             <div className="flex items-center justify-between mb-4 relative">
-              {[1, 2, 3, 4, 5].map((step) => (
+              {[1, 2, 3, 4, 5, 6].map((step) => (
                 <div key={step} className="flex flex-col items-center gap-2 relative z-10">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= step ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 text-slate-400'}`}>
                     {currentStep > step ? <CheckCircle2 className="w-5 h-5" /> : step}
                   </div>
                   <span className={`text-[10px] uppercase tracking-wider font-medium absolute -bottom-6 whitespace-nowrap ${currentStep >= step ? 'text-orange-600' : 'text-slate-400'}`}>
-                    {step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Safety' : step === 4 ? 'Seal & Weight' : 'Final Check'}
+                    {step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Weight' : step === 4 ? 'Safety' : step === 5 ? 'Seal' : 'Final Check'}
                   </span>
                 </div>
               ))}
@@ -1126,6 +1137,97 @@ export default function InspectionTab() {
               )}
 
               {currentStep === 3 && (
+                <motion.div
+                  key="stepWeight"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-8"
+                >
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-light text-slate-900">Calculated Weight & BOP</h3>
+                    <button
+                      onClick={() => {
+                        if (formData.series && weightPresets[formData.series]) {
+                          handleChange('dynamicWeights', weightPresets[formData.series].map((preset, idx) => ({ ...preset, id: Date.now().toString() + idx, isChecked: false })));
+                        } else {
+                          alert('No presets found for ' + formData.series);
+                        }
+                      }}
+                      className="px-4 py-2 bg-orange-50 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-100 transition-colors"
+                    >
+                      Load Series Weights ({formData.series || 'None Selected'})
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-6">
+                    {renderInput('Base Minimum Weight (kg) / น้ำหนักพื้นฐาน', 'baseWeight', 'number')}
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-sm font-medium text-slate-900">Dynamic Added Weights / น้ำหนักที่ต้องเพิ่ม</h3>
+                      <button 
+                         onClick={() => {
+                           const newWeights = [...(formData.dynamicWeights || [])];
+                           newWeights.push({ id: Date.now().toString(), title: '', condition: '', weight: 0, isChecked: true });
+                           handleChange('dynamicWeights', newWeights);
+                         }}
+                         className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-xs font-medium hover:bg-slate-200"
+                      >
+                         + Add Custom Weight
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {(formData.dynamicWeights || []).map((wItem, index) => (
+                        <div key={wItem.id} className="flex flex-col md:flex-row gap-4 items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <label className="flex items-center gap-2 cursor-pointer md:w-1/12 justify-center">
+                            <input 
+                              type="checkbox" 
+                              checked={wItem.isChecked} 
+                              onChange={(e) => {
+                                const newW = [...formData.dynamicWeights];
+                                newW[index].isChecked = e.target.checked;
+                                handleChange('dynamicWeights', newW);
+                              }}
+                              className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 w-5 h-5"
+                            />
+                          </label>
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
+                            <input type="text" value={wItem.title} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].title = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm" placeholder="e.g. รายการ" />
+                          </div>
+                          <div className="flex-2 w-full md:w-1/2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Condition</label>
+                            <input type="text" value={wItem.condition} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].condition = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm" placeholder="e.g. Dual Camshaft" />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Weight (kg)</label>
+                            <input type="number" value={wItem.weight} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].weight = Number(e.target.value); handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm" />
+                          </div>
+                          <button onClick={() => { const newW = formData.dynamicWeights.filter((_, i) => i !== index); handleChange('dynamicWeights', newW); }} className="p-2 text-slate-400 hover:text-red-500 transition-colors mt-5">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      {(!formData.dynamicWeights || formData.dynamicWeights.length === 0) && (
+                        <p className="text-center text-sm text-slate-400 py-6">No conditions added. Click load or add manually.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-orange-50/50 p-6 rounded-2xl border border-orange-100 flex justify-between items-center">
+                    <span className="text-sm font-medium text-slate-600 uppercase tracking-wider">Total Calculated BOP</span>
+                    <span className="text-3xl font-light text-orange-600">
+                      {Number(formData.baseWeight || 0) + (formData.dynamicWeights || []).reduce((acc: number, curr: { isChecked: boolean, weight: number }) => acc + (curr.isChecked ? Number(curr.weight) : 0), 0)} <span className="text-lg text-orange-400">kg</span>
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+
+              {currentStep === 4 && (
                 <motion.div
                   key="step3"
                   initial={{ opacity: 0, x: 20 }}
@@ -1227,7 +1329,7 @@ export default function InspectionTab() {
                 </motion.div>
               )}
 
-              {currentStep === 4 && (
+              {currentStep === 5 && (
                 <motion.div
                   key="step4"
                   initial={{ opacity: 0, x: 20 }}
@@ -1237,12 +1339,11 @@ export default function InspectionTab() {
                   className="space-y-8"
                 >
                   <div>
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Seal & Weight / ซีลและน้ำหนัก</h3>
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Seal / ซีล</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {renderInput('Engine Seal Number / หมายเลขซีลเครื่องยนต์', 'engineSealNumber')}
                       {renderInput('Gear Seal Number / หมายเลขซีลเกียร์', 'gearSealNumber')}
                       {renderInput('Tire Mark Amount / จำนวนการมาร์คยาง', 'tireMarkAmountStep3')}
-                      {renderInput('Balance of Performance / การปรับสมดุลสมรรถนะ (BOP)', 'balanceOfPerformance')}
                       {renderCheckbox('Weight Added After Race 2 / น้ำหนักที่ถ่วงเพิ่มหลังเรซ 2', 'weightAddedAfterRace2')}
                     </div>
                   </div>
@@ -1295,7 +1396,7 @@ export default function InspectionTab() {
                 </motion.div>
               )}
 
-              {currentStep === 5 && (
+              {currentStep === 6 && (
                 <motion.div
                   key="step5"
                   initial={{ opacity: 0, x: 20 }}
@@ -1334,11 +1435,11 @@ export default function InspectionTab() {
                       </div>
 
                       <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Seal & Weight</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Seal</h4>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                           <div><span className="text-slate-500 block text-xs">Engine Seal</span> {formData.engineSealNumber || '-'}</div>
                           <div><span className="text-slate-500 block text-xs">Gear Seal</span> {formData.gearSealNumber || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">BOP</span> {formData.balanceOfPerformance || '-'}</div>
+                          <div><span className="text-slate-500 block text-xs">BOP</span> {Number(formData.baseWeight || 0) + (formData.dynamicWeights || []).reduce((acc: number, curr: { isChecked: boolean, weight: number }) => acc + (curr.isChecked ? Number(curr.weight) : 0), 0)} kg</div>
                           <div><span className="text-slate-500 block text-xs">Change Seal</span> {formData.changeSeal || '-'}</div>
                           {formData.changeSeal === 'Change Seal' && (
                             <>
