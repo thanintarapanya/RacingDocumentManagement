@@ -126,7 +126,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
             id: Number(doc.id),
             formData: parsedFormData
           } as Entry;
-        }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        }).sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
         setEntries(entriesData);
       },
       (error) => {
