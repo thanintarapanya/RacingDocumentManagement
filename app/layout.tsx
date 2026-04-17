@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css'; // Global styles
 import { FirebaseProvider } from '@/components/FirebaseProvider';
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -23,6 +24,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
           {children}
         </FirebaseProvider>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
