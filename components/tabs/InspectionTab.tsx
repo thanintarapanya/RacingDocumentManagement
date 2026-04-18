@@ -12,7 +12,11 @@ import {
   ArrowLeft,
   CheckCircle2,
   Check,
-  UploadCloud
+  UploadCloud,
+  Car,
+  Settings2,
+  Tag,
+  Info
 } from 'lucide-react';
 
 const SERIES_CATEGORIES = [
@@ -464,6 +468,19 @@ export default function InspectionTab() {
     return filtered;
   }, [search, sortConfig, inspections, activeTab, eventFilter, yearFilter, currentUser?.uid, userRole]);
 
+  const getStickerGuideImage = (series: string) => {
+    // Note: To use the original images you uploaded, place them in the /public folder of your repo 
+    // and replace these placehold URLs with references like '/siam_eco_sticker_guide.png'
+    const normalized = (series || '').toLowerCase().trim();
+    if (normalized.includes('eco')) return 'https://placehold.co/1200x800/22c55e/ffffff?text=SIAM+ECO+Sticker+Guide';
+    if (normalized.includes('truck')) return 'https://placehold.co/1200x800/eab308/ffffff?text=SIAM+TRUCK+Sticker+Guide';
+    if (normalized.includes('group a')) return 'https://placehold.co/1200x800/ef4444/ffffff?text=SIAM+Group+A+Sticker+Guide';
+    if (normalized.includes('group n')) return 'https://placehold.co/1200x800/3b82f6/ffffff?text=SIAM+Group+N+Sticker+Guide';
+    if (normalized.includes('gtmc')) return 'https://placehold.co/1200x800/a855f7/ffffff?text=SIAM+GTMC+Sticker+Guide';
+    if (normalized.includes('gtrc')) return 'https://placehold.co/1200x800/f97316/ffffff?text=SIAM+GTRC+Sticker+Guide';
+    return 'https://placehold.co/1200x800/64748b/ffffff?text=General+Sticker+Guide';
+  };
+
   const renderSelect = (label: string, field: string, options: string[], className = '') => {
     const keys = field.split('.');
     let value = formData as any;
@@ -606,7 +623,7 @@ export default function InspectionTab() {
               onClick={() => {
                 setEditingId(null);
                 setFormData(initialFormData);
-                setCurrentStep(1);
+                setCurrentStep(userRole === 'offsite-scrutineer' || userRole === 'offsite_scrutineer' ? 0 : 1);
                 setView('form');
               }}
               className="whitespace-nowrap px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10"
@@ -1036,31 +1053,74 @@ export default function InspectionTab() {
 
         <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8 md:p-12">
           {/* Stepper */}
-          <div className="mb-12">
-            <div className="flex items-center justify-between mb-4 relative">
-              {[1, 2, 3, 4, 5, 6].map((step) => (
-                <div key={step} className="flex flex-col items-center gap-2 relative z-10">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= step ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 text-slate-400'}`}>
-                    {currentStep > step ? <CheckCircle2 className="w-5 h-5" /> : step}
+          {currentStep > 0 && (
+            <div className="mb-12">
+              <div className="flex items-center justify-between mb-4 relative">
+                {[1, 2, 3, 4, 5, 6].map((step) => (
+                  <div key={step} className="flex flex-col items-center gap-2 relative z-10">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= step ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 text-slate-400'}`}>
+                      {currentStep > step ? <CheckCircle2 className="w-5 h-5" /> : step}
+                    </div>
+                    <span className={`text-[10px] uppercase tracking-wider font-medium absolute -bottom-6 whitespace-nowrap ${currentStep >= step ? 'text-orange-600' : 'text-slate-400'}`}>
+                      {step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Weight' : step === 4 ? 'Safety' : step === 5 ? 'Seal' : 'Final Check'}
+                    </span>
                   </div>
-                  <span className={`text-[10px] uppercase tracking-wider font-medium absolute -bottom-6 whitespace-nowrap ${currentStep >= step ? 'text-orange-600' : 'text-slate-400'}`}>
-                    {step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Weight' : step === 4 ? 'Safety' : step === 5 ? 'Seal' : 'Final Check'}
-                  </span>
+                ))}
+                <div className="absolute left-12 right-12 h-1 bg-slate-100 rounded-full z-0 top-5">
+                  <motion.div 
+                    className="h-full bg-orange-500 rounded-full"
+                    initial={{ width: '0%' }}
+                    animate={{ width: `${Math.max(0, ((currentStep - 1) / (totalSteps - 1)) * 100)}%` }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
                 </div>
-              ))}
-              <div className="absolute left-12 right-12 h-1 bg-slate-100 rounded-full z-0 top-5">
-                <motion.div 
-                  className="h-full bg-orange-500 rounded-full"
-                  initial={{ width: '0%' }}
-                  animate={{ width: `${((currentStep - 1) / (totalSteps - 1)) * 100}%` }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                />
               </div>
             </div>
-          </div>
+          )}
 
           <div className="min-h-[400px]">
             <AnimatePresence mode="wait">
+              {currentStep === 0 && (
+                <motion.div
+                  key="step0"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="space-y-8 flex flex-col items-center justify-center py-16"
+                >
+                  <h3 className="text-2xl font-light text-slate-900 mb-8 text-center">Please choose the inspection type:</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl px-4">
+                    <button 
+                      onClick={() => {
+                        handleChange('isOffsiteInspection', false);
+                        setCurrentStep(1);
+                      }}
+                      className="py-12 px-6 bg-white border-2 border-slate-200 rounded-3xl hover:border-orange-500 hover:bg-orange-50 transition-all flex flex-col items-center justify-center gap-4 group cursor-pointer shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-orange-500/10"
+                    >
+                      <div className="w-16 h-16 rounded-2xl bg-slate-50 group-hover:bg-orange-100 border border-slate-100 group-hover:border-orange-200 flex items-center justify-center transition-colors mb-2">
+                        <FileText className="w-8 h-8 text-slate-400 group-hover:text-orange-500 transition-colors" />
+                      </div>
+                      <div className="text-xl font-medium text-slate-700 group-hover:text-orange-600 transition-colors">Normal Inspection</div>
+                      <p className="text-sm text-slate-500 font-light text-center">Standard scrutineering process at the event.</p>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleChange('isOffsiteInspection', true);
+                        setCurrentStep(1);
+                      }}
+                      className="py-12 px-6 bg-white border-2 border-slate-200 rounded-3xl hover:border-orange-500 hover:bg-orange-50 transition-all flex flex-col items-center justify-center gap-4 group cursor-pointer shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-orange-500/10"
+                    >
+                      <div className="w-16 h-16 rounded-2xl bg-slate-50 group-hover:bg-orange-100 border border-slate-100 group-hover:border-orange-200 flex items-center justify-center transition-colors mb-2">
+                        <Search className="w-8 h-8 text-slate-400 group-hover:text-orange-500 transition-colors" />
+                      </div>
+                      <div className="text-xl font-medium text-slate-700 group-hover:text-orange-600 transition-colors">Offsite Inspection</div>
+                      <p className="text-sm text-slate-500 font-light text-center">Remote scrutineering prior to or outside the circuit.</p>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
               {currentStep === 1 && (
                 <motion.div
                   key="step1"
@@ -1108,29 +1168,89 @@ export default function InspectionTab() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="space-y-8"
+                  className="space-y-6"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderInput('Car Manufacturer / ยี่ห้อรถ', 'carManufacturer')}
-                    {renderInput('Model / รุ่น', 'model')}
-                    {renderInput('Engine Displacement (CC) / ความจุกระบอกสูบ (ซีซี)', 'engineDisplacement')}
-                    {renderInput('Engine Code / รหัสเครื่องยนต์', 'engineCode')}
-                    {renderInput('Transmission / ระบบเกียร์', 'transmission')}
-                    {renderInput('Drivetrain / ระบบขับเคลื่อน', 'drivetrain')}
-                    {renderInput('Gear Shift Pattern / รูปแบบการเข้าเกียร์', 'gearShiftPattern')}
+                    {/* Vehicle Identity */}
+                    <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col">
+                      <h3 className="text-sm font-medium text-slate-900 mb-4 flex items-center gap-2">
+                        <Car className="w-4 h-4 text-slate-400" /> Vehicle Status
+                      </h3>
+                      <div className="space-y-4 flex-1">
+                        {renderInput('Car Manufacturer / ยี่ห้อรถ', 'carManufacturer')}
+                        {renderInput('Model / รุ่น', 'model')}
+                      </div>
+                    </div>
+
+                    {/* Tire Marking Amount */}
+                    <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col">
+                      <h3 className="text-sm font-medium text-slate-900 mb-4 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-slate-400" /> Tire Marking Amount
+                      </h3>
+                      <div className="flex flex-col justify-center space-y-4 flex-1">
+                        <div className="grid grid-cols-3 gap-3">
+                          {renderInput('Yokohama', 'tireMarkAmount.yokohama', 'number', '0')}
+                          {renderInput('Hankook', 'tireMarkAmount.hankook', 'number', '0')}
+                          {renderInput('Giti', 'tireMarkAmount.giti', 'number', '0')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Powertrain */}
+                    <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 md:col-span-2">
+                      <h3 className="text-sm font-medium text-slate-900 mb-4 flex items-center gap-2">
+                        <Settings2 className="w-4 h-4 text-slate-400" /> Powertrain & Systems
+                      </h3>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {renderInput('Displacement (CC)', 'engineDisplacement')}
+                          {renderInput('Engine Code', 'engineCode')}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                           {renderSelect('Transmission', 'transmission', ['AT', 'MT'])}
+                           {renderSelect('Drivetrain', 'drivetrain', ['FWD', 'RWD', 'AWD'])}
+                           {renderSelect('Gear Shift Pattern', 'gearShiftPattern', ['H Gate', 'Semi Auto', 'Sequential Shift'])}
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-6 pt-4 mt-2 border-t border-slate-100/60">
+                          {renderCheckbox('Auto Gear more than 6 Speed', 'autoGearMoreThan6')}
+                          {renderCheckbox('Paddle Shift', 'paddleShift')}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  
-                  <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderCheckbox('Auto Gear more than 6 Speed / เกียร์อัตโนมัติมากกว่า 6 สปีด', 'autoGearMoreThan6')}
-                    {renderCheckbox('Paddle Shift / แพดเดิลชิฟท์', 'paddleShift')}
-                  </div>
-                  
-                  <div className="pt-4 border-t border-slate-100">
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Tire Mark Amount / จำนวนการมาร์คยาง</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {renderInput('Yokohama / โยโกฮาม่า', 'tireMarkAmount.yokohama')}
-                      {renderInput('Hankook / ฮันกุก', 'tireMarkAmount.hankook')}
-                      {renderInput('Giti / จีที', 'tireMarkAmount.giti')}
+
+                  {/* Sponsors Sticker Check */}
+                  <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 relative w-full">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-slate-400" /> Sponsors Sticker Requirements
+                      </h3>
+                      <div className="relative group flex items-center gap-2 text-sm text-orange-600 font-medium cursor-help">
+                        {formData.series ? `${formData.series} Sticker Guide` : 'Sticker Guide'}
+                        <Info className="w-4 h-4" />
+                        
+                        {/* Hover Image Tooltip */}
+                        <div className="absolute right-0 bottom-8 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] w-[350px] sm:w-[500px] pointer-events-none bg-white p-2 rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-200 origin-bottom-right scale-95 group-hover:scale-100">
+                           <div className="relative w-full aspect-[4/3] bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center">
+                             {formData.series ? (
+                               <img 
+                                 src={getStickerGuideImage(formData.series)} 
+                                 alt={`${formData.series} Sticker Chart`}
+                                 className="w-full h-full object-cover"
+                               />
+                             ) : (
+                               <div className="text-slate-400 text-sm flex flex-col items-center gap-2">
+                                 <Car className="w-8 h-8 opacity-50" />
+                                 Please select a Series in Step 1
+                               </div>
+                             )}
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-4 mt-2">
+                      {renderCheckbox('Have All Stickers', 'stickers.haveAllStickers')}
                     </div>
                   </div>
                 </motion.div>
