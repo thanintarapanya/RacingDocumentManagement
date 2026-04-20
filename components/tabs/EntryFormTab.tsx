@@ -192,7 +192,17 @@ export default function EntryFormTab() {
   });
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      let extraUpdates = {};
+      if (field === 'event') {
+        if (value === '1' || value === '2') {
+          extraUpdates = { stadium: 'Chang International Circuit' };
+        } else if (value === '3') {
+          extraUpdates = { stadium: 'PT Songkhla Street Circuit' };
+        }
+      }
+      return { ...prev, [field]: value, ...extraUpdates };
+    });
   };
 
   const handleNext = () => {
@@ -1061,7 +1071,7 @@ export default function EntryFormTab() {
                   {renderSelect('Grade Race / คลาส', 'grade', gradeOptions)}
                   {renderInput('Car Number / หมายเลขรถ', 'carNumber', 'number')}
                   {renderSelect('Stadium / สนามแข่งขัน', 'stadium', stadiumOptions)}
-                  {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3', '4', '5'])}
+                  {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3'])}
                   {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
                 </div>
               )}

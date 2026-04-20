@@ -17,10 +17,12 @@ import {
   Trash2,
   Plus,
   UserCircle,
-  Lock
+  Lock,
+  Scale
 } from 'lucide-react';
 import AccountSettings from './settings/AccountSettings';
 import PrivacySettings from './settings/PrivacySettings';
+import RulesSettings from './settings/RulesSettings';
 
 const ROLES = [
   'admin',
@@ -179,17 +181,30 @@ export default function SettingsTab() {
               Privacy
             </button>
             {canManageUsers && (
-              <button
-                onClick={() => setActiveSubTab('users')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                  activeSubTab === 'users' 
-                    ? 'bg-orange-50 text-orange-600' 
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <Users className="w-5 h-5" />
-                User & Role
-              </button>
+              <>
+                <button
+                  onClick={() => setActiveSubTab('users')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                    activeSubTab === 'users' 
+                      ? 'bg-orange-50 text-orange-600' 
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Users className="w-5 h-5" />
+                  User & Role
+                </button>
+                <button
+                  onClick={() => setActiveSubTab('rules')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                    activeSubTab === 'rules' 
+                      ? 'bg-orange-50 text-orange-600' 
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Scale className="w-5 h-5" />
+                  Rules
+                </button>
+              </>
             )}
           </nav>
         </div>
@@ -198,6 +213,7 @@ export default function SettingsTab() {
         <div className="flex-1 overflow-y-auto pb-12 pr-4 scrollbar-hide">
           {activeSubTab === 'account' && <AccountSettings />}
           {activeSubTab === 'privacy' && <PrivacySettings />}
+          {activeSubTab === 'rules' && canManageUsers && <RulesSettings />}
           {activeSubTab === 'users' && canManageUsers && (
             <div className="space-y-8">
               {/* Header Actions */}

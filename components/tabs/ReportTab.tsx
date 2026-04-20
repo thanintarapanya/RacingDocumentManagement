@@ -373,7 +373,18 @@ export default function ReportTab() {
       <div className="relative">
         <select
           value={formData[field] as string}
-          onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+          onChange={(e) => {
+            const value = e.target.value;
+            let extraUpdates = {};
+            if (field === 'event') {
+              if (value === '1' || value === '2') {
+                extraUpdates = { stadium: 'Chang International Circuit' };
+              } else if (value === '3') {
+                extraUpdates = { stadium: 'PT Songkhla Street Circuit' };
+              }
+            }
+            setFormData({ ...formData, [field]: value, ...extraUpdates });
+          }}
           className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
           disabled={viewMode || !canEdit}
         >
@@ -736,7 +747,7 @@ export default function ReportTab() {
                       {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
                       {renderSelect('Report Session / รอบการแข่งขัน', 'reportSession', ['Qualify', 'Post-Qualify', 'Post-Race', 'Special Case'])}
                       {renderInput('Race / เรซ', 'race')}
-                      {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3', '4', '5'])}
+                      {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3'])}
                       {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
                     </div>
                     <div className="space-y-6">

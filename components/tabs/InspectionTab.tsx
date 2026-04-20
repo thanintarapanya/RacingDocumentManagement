@@ -16,7 +16,10 @@ import {
   Car,
   Settings2,
   Tag,
-  Info
+  Info,
+  RefreshCw,
+  Plus,
+  Scale
 } from 'lucide-react';
 
 const SERIES_CATEGORIES = [
@@ -29,10 +32,10 @@ const SERIES_CATEGORIES = [
   'ISUZU Challenge Thailand'
 ];
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, where, getDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
-import { weightPresets } from './weightPresets';
+import { weightPresets, baseWeightPresets } from './weightPresets';
 
 type Inspection = {
   id: string;
@@ -144,13 +147,21 @@ const initialFormData = {
   reasonForChangingSeal: '',
 
   // Step 3: Weight
-  baseWeight: 0,
+  baseWeight: 0 as string | number,
+  baseWeightOptions: [] as Array<{
+    id: string;
+    title: string;
+    condition: string;
+    weight: number;
+    isCustom?: boolean;
+  }>,
   dynamicWeights: [] as Array<{
     id: string;
     title: string;
     condition: string;
     weight: number;
     isChecked: boolean;
+    isCustom?: boolean;
   }>
 };
 
@@ -224,6 +235,61 @@ export default function InspectionTab() {
   };
   
   const canEdit = canEditAll || (canEditOwn && isOwnDoc);
+
+  // FETCH CUSTOM RULES FOR AUTO SYNC
+  const [fetchedCustomRules, setFetchedCustomRules] = useState<any>(null);
+  const [customRulesLoaded, setCustomRulesLoaded] = useState(false);
+  
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'weight_rules'), (docSnap) => {
+      if (docSnap.exists()) {
+        setFetchedCustomRules(docSnap.data());
+      } else {
+        setFetchedCustomRules({});
+      }
+      setCustomRulesLoaded(true);
+    }, (error) => {
+      console.error('Failed to fetch custom rules', error);
+      setCustomRulesLoaded(true);
+    });
+    return () => unsub();
+  }, []);
+
+  // AUTO SYNC RULES WHEN SERIES CHANGES
+  const [lastSyncedSeries, setLastSyncedSeries] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Only auto-sync if we have loaded custom rules and the series is new/changed
+    // Also skip auto-sync if we are editing an existing record, unless they explicitly
+    // change the series via the dropdown AFTER loading
+    if (customRulesLoaded && formData.series && formData.series !== lastSyncedSeries) {
+      if (!editingId || (editingId && lastSyncedSeries !== null)) {
+        const oldBase = baseWeightPresets[formData.series] || [];
+        const oldDyn = weightPresets[formData.series] || [];
+
+        let currentBase = oldBase;
+        let currentDyn = oldDyn;
+
+        if (fetchedCustomRules) {
+          if (fetchedCustomRules.baseWeightPresets?.[formData.series]?.length > 0) {
+            currentBase = fetchedCustomRules.baseWeightPresets[formData.series];
+          }
+          if (fetchedCustomRules.weightPresets?.[formData.series]?.length > 0) {
+            currentDyn = fetchedCustomRules.weightPresets[formData.series];
+          }
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          baseWeightOptions: currentBase.map((p: any, i: number) => ({ ...p, id: Date.now() + 'b' + i, isCustom: false })),
+          baseWeight: '',
+          dynamicWeights: currentDyn.map((p: any, i: number) => ({ ...p, id: Date.now() + 'd' + i, isChecked: false, isCustom: false }))
+        }));
+      }
+
+      setLastSyncedSeries(formData.series);
+    }
+  }, [formData.series, fetchedCustomRules, customRulesLoaded, lastSyncedSeries, editingId]);
 
   useEffect(() => {
     if (formData.series && formData.carNumber) {
@@ -327,12 +393,21 @@ export default function InspectionTab() {
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => {
+      let extraUpdates = {};
+      if (field === 'event') {
+        if (value === '1' || value === '2') {
+          extraUpdates = { stadium: 'Chang International Circuit' };
+        } else if (value === '3') {
+          extraUpdates = { stadium: 'PT Songkhla Street Circuit' };
+        }
+      }
+
       const keys = field.split('.');
       if (keys.length === 1) {
-        return { ...prev, [field]: value };
+        return { ...prev, [field]: value, ...extraUpdates };
       }
       
-      const newState = { ...prev };
+      const newState = { ...prev, ...extraUpdates };
       let current: any = newState;
       for (let i = 0; i < keys.length - 1; i++) {
         current[keys[i]] = { ...current[keys[i]] };
@@ -1135,7 +1210,7 @@ export default function InspectionTab() {
                     <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Auto-fill Identifiers</h3>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                       {renderSelect('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
-                      {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3', '4', '5'])}
+                      {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3'])}
                       {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
                       {renderInput('Car Number / หมายเลขรถ', 'carNumber')}
                     </div>
@@ -1211,12 +1286,14 @@ export default function InspectionTab() {
                            {renderSelect('Drivetrain', 'drivetrain', ['FWD', 'RWD', 'AWD'])}
                            {renderSelect('Gear Shift Pattern', 'gearShiftPattern', ['H Gate', 'Semi Auto', 'Sequential Shift'])}
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-6 pt-4 mt-2 border-t border-slate-100/60">
-                          {renderCheckbox('Auto Gear more than 6 Speed', 'autoGearMoreThan6')}
-                          {renderCheckbox('Paddle Shift', 'paddleShift')}
-                        </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Additional Options */}
+                  <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col sm:flex-row gap-6">
+                    {renderCheckbox('Auto Gear more than 6 Speed', 'autoGearMoreThan6')}
+                    {renderCheckbox('Paddle Shift', 'paddleShift')}
                   </div>
 
                   {/* Sponsors Sticker Check */}
@@ -1265,84 +1342,195 @@ export default function InspectionTab() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="space-y-8"
                 >
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-light text-slate-900">Calculated Weight & BOP</h3>
-                    <button
-                      onClick={() => {
-                        if (formData.series && weightPresets[formData.series]) {
-                          handleChange('dynamicWeights', weightPresets[formData.series].map((preset, idx) => ({ ...preset, id: Date.now().toString() + idx, isChecked: false })));
-                        } else {
-                          alert('No presets found for ' + formData.series);
-                        }
-                      }}
-                      className="px-4 py-2 bg-orange-50 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-100 transition-colors"
-                    >
-                      Load Series Weights ({formData.series || 'None Selected'})
-                    </button>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                      <h3 className="text-2xl font-light text-slate-900 tracking-tight">Calculated Weight & BOP</h3>
+                      <p className="text-sm text-slate-500 mt-1">Base minimum weights and series-specific penalties are automatically synchronized based on current rules.</p>
+                    </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 gap-6">
-                    {renderInput('Base Minimum Weight (kg) / น้ำหนักพื้นฐาน', 'baseWeight', 'number')}
-                  </div>
+                  <div className="grid grid-cols-1 gap-8">
+                    {/* Base Minimum Weight Section */}
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Base Minimum Weight</h3>
+                        <button 
+                            onClick={() => {
+                              const newOptions = [...(formData.baseWeightOptions || [])];
+                              newOptions.push({ id: Date.now().toString(), title: 'Custom', condition: '', weight: 0, isCustom: true });
+                              handleChange('baseWeightOptions', newOptions);
+                            }}
+                           className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors"
+                        >
+                           <Plus className="w-3.5 h-3.5" /> Add Options
+                        </button>
+                      </div>
 
-                  <div className="pt-6 border-t border-slate-100">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-sm font-medium text-slate-900">Dynamic Added Weights / น้ำหนักที่ต้องเพิ่ม</h3>
-                      <button 
-                         onClick={() => {
-                           const newWeights = [...(formData.dynamicWeights || [])];
-                           newWeights.push({ id: Date.now().toString(), title: '', condition: '', weight: 0, isChecked: true });
-                           handleChange('dynamicWeights', newWeights);
-                         }}
-                         className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-xs font-medium hover:bg-slate-200"
-                      >
-                         + Add Custom Weight
-                      </button>
+                      {(formData.baseWeightOptions && formData.baseWeightOptions.length > 0) ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                          {formData.baseWeightOptions.map((opt: any, index: number) => {
+                            if (!opt.isCustom) {
+                              return (
+                                <label key={opt.id} className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-all ${formData.baseWeight === opt.weight.toString() ? 'border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                                  <div className="flex items-center gap-3">
+                                    <input 
+                                      type="radio" 
+                                      name="baseWeightSelection"
+                                      checked={formData.baseWeight === opt.weight.toString()} 
+                                      onChange={() => handleChange('baseWeight', opt.weight.toString())}
+                                      className="rounded-full border-slate-300 text-orange-500 focus:ring-orange-500 w-4 h-4"
+                                    />
+                                    <div>
+                                      <p className="text-sm font-medium text-slate-900 leading-none mb-1.5">{opt.condition}</p>
+                                      <p className="text-xs text-slate-500">{opt.title}</p>
+                                    </div>
+                                  </div>
+                                  <span className="font-mono text-sm font-medium text-slate-700 bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-md">{opt.weight} kg</span>
+                                </label>
+                              );
+                            }
+
+                            return (
+                              <div key={opt.id} className="col-span-1 md:col-span-2 flex flex-col md:flex-row gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-200 border-dashed">
+                                <label className="flex items-center gap-2 cursor-pointer pl-1">
+                                  <input 
+                                    type="radio" 
+                                    name="baseWeightSelection"
+                                    checked={formData.baseWeight === opt.weight.toString()} 
+                                    onChange={() => handleChange('baseWeight', opt.weight.toString())}
+                                    className="rounded-full border-slate-300 text-orange-500 focus:ring-orange-500 w-4 h-4"
+                                  />
+                                </label>
+                                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <input type="text" value={opt.title} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].title = e.target.value; handleChange('baseWeightOptions', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="Title (e.g. ความจุระบอกสูบ)" />
+                                  <input type="text" value={opt.condition} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].condition = e.target.value; handleChange('baseWeightOptions', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="Condition" />
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <input type="number" value={opt.weight} onChange={e => {
+                                      const val = e.target.value;
+                                      const newW = [...formData.baseWeightOptions]; 
+                                      newW[index].weight = Number(val); 
+                                      handleChange('baseWeightOptions', newW);
+                                      if (formData.baseWeight === opt.weight.toString()) {
+                                        handleChange('baseWeight', val);
+                                      }
+                                  }} className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono text-center focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="0" />
+                                  <button onClick={() => { 
+                                    const newW = formData.baseWeightOptions.filter((_: any, i: number) => i !== index); 
+                                    handleChange('baseWeightOptions', newW); 
+                                    if (formData.baseWeight === opt.weight.toString()) handleChange('baseWeight', '');
+                                  }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 bg-slate-50 border border-slate-100 border-dashed rounded-xl">
+                          <Scale className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                          <p className="text-sm text-slate-500 font-medium">No base weights loaded</p>
+                          <p className="text-xs text-slate-400 mt-1 mb-4">Sync rules or add your own options manually.</p>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="space-y-4">
-                      {(formData.dynamicWeights || []).map((wItem, index) => (
-                        <div key={wItem.id} className="flex flex-col md:flex-row gap-4 items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
-                          <label className="flex items-center gap-2 cursor-pointer md:w-1/12 justify-center">
-                            <input 
-                              type="checkbox" 
-                              checked={wItem.isChecked} 
-                              onChange={(e) => {
-                                const newW = [...formData.dynamicWeights];
-                                newW[index].isChecked = e.target.checked;
-                                handleChange('dynamicWeights', newW);
-                              }}
-                              className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 w-5 h-5"
-                            />
-                          </label>
-                          <div className="flex-1">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
-                            <input type="text" value={wItem.title} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].title = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm" placeholder="e.g. รายการ" />
-                          </div>
-                          <div className="flex-2 w-full md:w-1/2">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Condition</label>
-                            <input type="text" value={wItem.condition} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].condition = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm" placeholder="e.g. Dual Camshaft" />
-                          </div>
-                          <div className="flex-1">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Weight (kg)</label>
-                            <input type="number" value={wItem.weight} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].weight = Number(e.target.value); handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm" />
-                          </div>
-                          <button onClick={() => { const newW = formData.dynamicWeights.filter((_, i) => i !== index); handleChange('dynamicWeights', newW); }} className="p-2 text-slate-400 hover:text-red-500 transition-colors mt-5">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
+                    {/* Dynamic Penalty Weights Section */}
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Dynamic Penalties & Bonuses</h3>
+                        <button 
+                           onClick={() => {
+                             const newWeights = [...(formData.dynamicWeights || [])];
+                             newWeights.push({ id: Date.now().toString(), title: 'Custom', condition: '', weight: 0, isChecked: true, isCustom: true });
+                             handleChange('dynamicWeights', newWeights);
+                           }}
+                           className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors"
+                        >
+                           <Plus className="w-3.5 h-3.5" /> Add Rule
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {(formData.dynamicWeights || []).map((wItem: any, index: number) => {
+                          if (!wItem.isCustom) {
+                            return (
+                              <label key={wItem.id} className={`flex items-start justify-between p-4 border rounded-xl cursor-pointer transition-all ${wItem.isChecked ? 'border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                                <div className="flex items-start gap-3">
+                                   <input 
+                                     type="checkbox" 
+                                     checked={wItem.isChecked} 
+                                     onChange={(e) => {
+                                       const newW = [...formData.dynamicWeights];
+                                       newW[index].isChecked = e.target.checked;
+                                       handleChange('dynamicWeights', newW);
+                                     }}
+                                     className="w-4 h-4 mt-0.5 text-orange-500 border-slate-300 focus:ring-orange-500 rounded" 
+                                   />
+                                   <div>
+                                     <p className="text-sm font-medium text-slate-900 leading-tight mb-1.5 pr-2">{wItem.condition}</p>
+                                     {wItem.title && <p className="text-xs text-slate-500">{wItem.title}</p>}
+                                   </div>
+                                </div>
+                                <span className={`font-mono text-sm font-medium px-2.5 py-1 rounded-md shrink-0 border ${wItem.weight > 0 ? 'text-rose-700 bg-rose-50 border-rose-200' : wItem.weight < 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-700 bg-slate-100 border-slate-200'}`}>
+                                  {wItem.weight > 0 ? '+' : ''}{wItem.weight}
+                                </span>
+                              </label>
+                            );
+                          }
+                          
+                          return (
+                            <div key={wItem.id} className="col-span-1 md:col-span-2 flex flex-col md:flex-row gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-200 border-dashed">
+                              <label className="flex items-center gap-2 cursor-pointer pl-1">
+                                <input 
+                                  type="checkbox" 
+                                  checked={wItem.isChecked} 
+                                  onChange={(e) => {
+                                    const newW = [...formData.dynamicWeights];
+                                    newW[index].isChecked = e.target.checked;
+                                    handleChange('dynamicWeights', newW);
+                                  }}
+                                  className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 w-4 h-4"
+                                />
+                              </label>
+                              <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <input type="text" value={wItem.title} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].title = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="Title (e.g. รายการ)" />
+                                <input type="text" value={wItem.condition} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].condition = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="Condition details" />
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <input type="number" value={wItem.weight} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].weight = Number(e.target.value); handleChange('dynamicWeights', newW); }} className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono text-center focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" />
+                                <button onClick={() => { const newW = formData.dynamicWeights.filter((_: any, i: number) => i !== index); handleChange('dynamicWeights', newW); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
                       {(!formData.dynamicWeights || formData.dynamicWeights.length === 0) && (
-                        <p className="text-center text-sm text-slate-400 py-6">No conditions added. Click load or add manually.</p>
+                        <div className="text-center py-8 bg-slate-50 border border-slate-100 border-dashed rounded-xl">
+                          <p className="text-sm text-slate-500 font-medium">No penalty/bonus active</p>
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="bg-orange-50/50 p-6 rounded-2xl border border-orange-100 flex justify-between items-center">
-                    <span className="text-sm font-medium text-slate-600 uppercase tracking-wider">Total Calculated BOP</span>
-                    <span className="text-3xl font-light text-orange-600">
-                      {Number(formData.baseWeight || 0) + (formData.dynamicWeights || []).reduce((acc: number, curr: { isChecked: boolean, weight: number }) => acc + (curr.isChecked ? Number(curr.weight) : 0), 0)} <span className="text-lg text-orange-400">kg</span>
-                    </span>
+                  <div className="relative mt-8">
+                    <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-rose-500 rounded-2xl blur opacity-20"></div>
+                    <div className="relative bg-white/80 backdrop-blur-xl border border-white/50 shadow-sm p-6 sm:p-8 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-400 tracking-widest uppercase mb-1">Final Result</h4>
+                        <p className="text-slate-800 font-medium">Total Calculated Balance Of Performance</p>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-rose-600">
+                          {Number(formData.baseWeight || 0) + (formData.dynamicWeights || []).reduce((acc: number, curr: { isChecked: boolean, weight: number }) => acc + (curr.isChecked ? Number(curr.weight) : 0), 0)}
+                        </span>
+                        <span className="text-xl font-bold text-orange-400">kg</span>
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
               )}
