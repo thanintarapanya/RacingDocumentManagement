@@ -150,10 +150,12 @@ export default function EntryFormTab() {
     carNumber: '',
     stadium: '',
     event: '',
-    eventYear: '',
+    eventYear: new Date().getFullYear().toString(),
     // Step 2
     nameThai: '',
+    surnameThai: '',
     nameEnglish: '',
+    surnameEnglish: '',
     dob: '',
     bloodType: '',
     nationality: '',
@@ -218,8 +220,8 @@ export default function EntryFormTab() {
     setTimeout(() => {
       if (editingId) {
         updateEntry(editingId, {
-          nameEn: formData.nameEnglish || '-',
-          nameTh: formData.nameThai || '-',
+          nameEn: [formData.nameEnglish, formData.surnameEnglish].filter(Boolean).join(' ') || '-',
+          nameTh: [formData.nameThai, formData.surnameThai].filter(Boolean).join(' ') || '-',
           seriesRace: formData.series || '-',
           gradeRace: formData.grade || '-',
           carNumber: formData.carNumber || '-',
@@ -227,8 +229,8 @@ export default function EntryFormTab() {
         });
       } else {
         addEntry({
-          nameEn: formData.nameEnglish || '-',
-          nameTh: formData.nameThai || '-',
+          nameEn: [formData.nameEnglish, formData.surnameEnglish].filter(Boolean).join(' ') || '-',
+          nameTh: [formData.nameThai, formData.surnameThai].filter(Boolean).join(' ') || '-',
           seriesRace: formData.series || '-',
           gradeRace: formData.grade || '-',
           carNumber: formData.carNumber || '-',
@@ -245,8 +247,8 @@ export default function EntryFormTab() {
         setUploadedFiles({});
         // Reset form
         setFormData({
-          series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: '',
-          nameThai: '', nameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
+          series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: new Date().getFullYear().toString(),
+          nameThai: '', surnameThai: '', nameEnglish: '', surnameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
           competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
           consentingParty: '', signDate: '',
         });
@@ -529,8 +531,8 @@ export default function EntryFormTab() {
                 setEditingId(null);
                 setUploadedFiles({});
                 setFormData({
-                  series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: '',
-                  nameThai: '', nameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
+                  series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: new Date().getFullYear().toString(),
+                  nameThai: '', surnameThai: '', nameEnglish: '', surnameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
                   competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
                   consentingParty: '', signDate: '',
                 });
@@ -583,7 +585,7 @@ export default function EntryFormTab() {
                   <SortableHeader label="Name (EN)" sortKey="nameEn" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="Name (TH)" sortKey="nameTh" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="Series Race" sortKey="seriesRace" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="Grade Race" sortKey="gradeRace" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="Class Race" sortKey="gradeRace" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="Car Number" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
                   <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-right">Actions</th>
                 </tr>
@@ -696,13 +698,13 @@ export default function EntryFormTab() {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Filter by Grade Race</label>
+                    <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Filter by Class Race</label>
                     <select 
                       value={exportFilters.grade}
                       onChange={(e) => setExportFilters(prev => ({ ...prev, grade: e.target.value }))}
                       className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none"
                     >
-                      <option value="ALL">All Grades</option>
+                      <option value="ALL">All Classes</option>
                       {gradeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </div>
@@ -801,7 +803,7 @@ export default function EntryFormTab() {
                 <div className="text-lg font-light text-slate-900">{formData.series || '-'}</div>
               </div>
               <div>
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Grade Race</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Class Race</h3>
                 <div className="text-lg font-light text-slate-900">{formData.grade || '-'}</div>
               </div>
               <div>
@@ -1068,18 +1070,28 @@ export default function EntryFormTab() {
               {currentStep === 1 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {renderSelect('Series Race / รุ่นการแข่งขัน', 'series', seriesOptions)}
-                  {renderSelect('Grade Race / คลาส', 'grade', gradeOptions)}
+                  {renderSelect('Class Race / คลาส', 'grade', gradeOptions)}
                   {renderInput('Car Number / หมายเลขรถ', 'carNumber', 'number')}
                   {renderSelect('Stadium / สนามแข่งขัน', 'stadium', stadiumOptions)}
                   {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3'])}
-                  {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
+                  <div className="space-y-2">
+                    <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Year / ปีการแข่งขัน</label>
+                    <input 
+                      type="text" 
+                      value={formData.eventYear || ''}
+                      disabled
+                      className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all opacity-60 cursor-not-allowed"
+                    />
+                  </div>
                 </div>
               )}
 
               {currentStep === 2 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {renderInput('Name (Thai) / ชื่อ (ภาษาไทย)', 'nameThai')}
+                  {renderInput('Surname (Thai) / นามสกุล (ภาษาไทย)', 'surnameThai')}
                   {renderInput('Name (English) / ชื่อ (ภาษาอังกฤษ)', 'nameEnglish')}
+                  {renderInput('Surname (English) / นามสกุล (ภาษาอังกฤษ)', 'surnameEnglish')}
                   {renderInput('Date of Birth / วันเดือนปีเกิด', 'dob', 'date')}
                   {renderSelect('Blood Type / กรุ๊ปเลือด', 'bloodType', bloodTypes)}
                   {renderInput('Nationality / สัญชาติ', 'nationality')}

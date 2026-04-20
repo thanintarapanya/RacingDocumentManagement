@@ -127,7 +127,7 @@ export default function RequestTab() {
     carNumber: '',
     series: '',
     event: '',
-    eventYear: '',
+    eventYear: new Date().getFullYear().toString(),
     licenseDriverNo: '',
     licenseTeamManagerNo: '',
     nameRequestPermission: '',
@@ -1535,22 +1535,12 @@ export default function RequestTab() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Year / ปีการแข่งขัน</label>
-                      <div className="relative">
-                        <select 
-                          value={newRequest.eventYear || ''}
-                          onChange={(e) => setNewRequest({...newRequest, eventYear: e.target.value})}
-                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
-                          disabled={viewMode || !canEdit}
-                        >
-                          <option value="" disabled></option>
-                          <option value="2024">2024</option>
-                          <option value="2025">2025</option>
-                          <option value="2026">2026</option>
-                          <option value="2027">2027</option>
-                          <option value="2028">2028</option>
-                        </select>
-                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      </div>
+                      <input 
+                        type="text"
+                        value={newRequest.eventYear || ''}
+                        disabled
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all opacity-60 cursor-not-allowed"
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Car Number / หมายเลขรถ</label>

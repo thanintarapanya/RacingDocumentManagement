@@ -90,7 +90,7 @@ const initialFormData = {
   series: '',
   grades: '',
   event: '',
-  eventYear: '',
+  eventYear: new Date().getFullYear().toString(),
   carNumber: '',
   teamName: '',
   racerName: '',
@@ -98,6 +98,7 @@ const initialFormData = {
 
   // Step 2: Car Info
   carManufacturer: '',
+  otherCarManufacturer: '',
   model: '',
   engineDisplacement: '',
   engineCode: '',
@@ -105,8 +106,7 @@ const initialFormData = {
   drivetrain: '',
   gearShiftPattern: '',
   isOffsiteInspection: false,
-  autoGearMoreThan6: false,
-  paddleShift: false,
+  stickers: { haveAllStickers: false, stillNeedSticker: false },
   engineCapacityWeight: {} as Record<string, { checked: boolean, weight: string, committeeWeight: string }>,
   carBrandCapacityRestrictor: {} as Record<string, { checked: boolean, weight: string }>,
   tireMarkAmount: { yokohama: '', hankook: '', giti: '' },
@@ -213,6 +213,7 @@ export default function InspectionTab() {
   );
 
   const [formData, setFormData] = useState(initialFormData);
+  const [showValidation, setShowValidation] = useState(false);
 
   const entries = useAppStore(state => state.entries);
   const userRole = useAppStore(state => state.userRole);
@@ -223,6 +224,7 @@ export default function InspectionTab() {
   const isOwnDoc = editingId ? (inspections.find(i => i.id === editingId)?.userId === currentUser?.uid) : true;
   
   const canEditField = (field: string) => {
+    if (field === 'eventYear' || field === 'inspectionDate') return false;
     if (canEditAll) return true;
     if (canEditOwn && isOwnDoc) {
       if (editingId) {
@@ -235,6 +237,25 @@ export default function InspectionTab() {
   };
   
   const canEdit = canEditAll || (canEditOwn && isOwnDoc);
+
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (!formData.series || !formData.carNumber || !formData.grades) {
+        setShowValidation(true);
+        showToast('Please fill in Series, Car Number, and Classes (Auto-fill identifiers).');
+        return;
+      }
+    }
+    if (currentStep === 2) {
+      if (!formData.carManufacturer || (formData.carManufacturer === 'Other' && !formData.otherCarManufacturer)) {
+        setShowValidation(true);
+        showToast('Please specify the Car Manufacturer.');
+        return;
+      }
+    }
+    setShowValidation(false);
+    setCurrentStep(prev => prev + 1);
+  };
 
   // FETCH CUSTOM RULES FOR AUTO SYNC
   const [fetchedCustomRules, setFetchedCustomRules] = useState<any>(null);
@@ -297,8 +318,9 @@ export default function InspectionTab() {
       if (entry && entry.formData) {
         setFormData(prev => ({
           ...prev,
+          grades: entry.formData.class || entry.formData.grades || '',
           teamName: entry.formData.teamName || '',
-          racerName: entry.formData.nameEnglish || entry.formData.nameThai || '',
+          racerName: [entry.formData.nameEnglish, entry.formData.surnameEnglish].filter(Boolean).join(' ') || [entry.formData.nameThai, entry.formData.surnameThai].filter(Boolean).join(' ') || '',
           teamManagerName: entry.formData.teamManagerName || '',
           carManufacturer: entry.formData.carManufacturer || '',
           model: entry.formData.model || '',
@@ -556,21 +578,33 @@ export default function InspectionTab() {
     return 'https://placehold.co/1200x800/64748b/ffffff?text=General+Sticker+Guide';
   };
 
+  const isFieldInvalid = (field: string) => {
+    if (!showValidation) return false;
+    const isMissing = (val: any) => val === undefined || val === null || val === '';
+    if (field === 'series' && isMissing(formData.series)) return true;
+    if (field === 'carNumber' && isMissing(formData.carNumber)) return true;
+    if (field === 'grades' && isMissing(formData.grades)) return true;
+    if (field === 'carManufacturer' && isMissing(formData.carManufacturer)) return true;
+    if (field === 'otherCarManufacturer' && formData.carManufacturer === 'Other' && isMissing(formData.otherCarManufacturer)) return true;
+    return false;
+  };
+
   const renderSelect = (label: string, field: string, options: string[], className = '') => {
     const keys = field.split('.');
     let value = formData as any;
     for (const key of keys) {
       value = value?.[key];
     }
+    const invalid = isFieldInvalid(field);
     
     return (
       <div className={`space-y-2 ${className}`}>
-        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
+        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label} {invalid && <span className="text-red-500">*</span>}</label>
         <div className="relative">
           <select 
             value={value || ''}
             onChange={(e) => handleChange(field, e.target.value)}
-            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
+            className={`w-full bg-slate-50/50 border ${invalid ? 'border-red-400 ring-2 ring-red-100/50' : 'border-slate-100'} rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed`}
             disabled={!canEditField(field)}
           >
             <option value="" disabled>Select {label.split('/')[0].trim()}</option>
@@ -588,15 +622,16 @@ export default function InspectionTab() {
     for (const key of keys) {
       value = value?.[key];
     }
+    const invalid = isFieldInvalid(field);
     
     return (
       <div className={`space-y-2 ${className}`}>
-        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
+        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label} {invalid && <span className="text-red-500">*</span>}</label>
         <input 
           type={type} 
           value={value || ''}
           onChange={(e) => handleChange(field, e.target.value)}
-          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+          className={`w-full bg-slate-50/50 border ${invalid ? 'border-red-400 ring-2 ring-red-100/50' : 'border-slate-100'} rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed`}
           placeholder={placeholder || label}
           disabled={!canEditField(field)}
         />
@@ -1058,13 +1093,22 @@ export default function InspectionTab() {
                   <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Gear Shift Pattern</h4>
                   <div className="text-sm font-light text-slate-600">{data.gearShiftPattern || '-'}</div>
                 </div>
+              </div>
+            </div>
+
+            {/* Sponsors Sticker Requirements */}
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4 flex items-center gap-2">
+                <Tag className="w-4 h-4" /> Sponsors Sticker Requirements
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Auto Gear more than 6 Speed</h4>
-                  <div className="text-sm font-light text-slate-600">{data.autoGearMoreThan6 ? 'Yes' : 'No'}</div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Have All Sticker/มีสติกเกอร์ครบแล้ว</h4>
+                  <div className="text-sm font-light text-slate-600">{data.stickers?.haveAllStickers ? 'Yes' : 'No'}</div>
                 </div>
                 <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Paddle Shift</h4>
-                  <div className="text-sm font-light text-slate-600">{data.paddleShift ? 'Yes' : 'No'}</div>
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Still Need Sticker/ต้องการสติกเกอร์</h4>
+                  <div className="text-sm font-light text-slate-600">{data.stickers?.stillNeedSticker ? 'Yes' : 'No'}</div>
                 </div>
               </div>
             </div>
@@ -1221,7 +1265,7 @@ export default function InspectionTab() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {renderInput('Inspection Date / วันที่ตรวจสภาพ', 'inspectionDate', 'date')}
                       {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
-                      {renderSelect('Grades / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
+                      {renderSelect('Classes / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
                       {renderInput('Team Name / ชื่อทีม', 'teamName')}
                       {renderInput('Racer Name / ชื่อนักแข่ง', 'racerName')}
                       {renderInput('Team Manager Name / ชื่อผู้จัดการทีม', 'teamManagerName')}
@@ -1252,7 +1296,12 @@ export default function InspectionTab() {
                         <Car className="w-4 h-4 text-slate-400" /> Vehicle Status
                       </h3>
                       <div className="space-y-4 flex-1">
-                        {renderInput('Car Manufacturer / ยี่ห้อรถ', 'carManufacturer')}
+                        {renderSelect('Car Manufacturer / ยี่ห้อรถ', 'carManufacturer', [
+                          'Toyota', 'Honda', 'Nissan', 'Mitsubishi', 'Mazda', 
+                          'Subaru', 'Ford', 'Chevrolet', 'BMW', 'Mercedes-Benz', 
+                          'Audi', 'Volkswagen', 'Porsche', 'Aston Martin', 'Suzuki', 'Isuzu', 'Peugeot', 'Other'
+                        ])}
+                        {formData.carManufacturer === 'Other' && renderInput('Specify Car Manufacturer / ระบุยี่ห้อรถ', 'otherCarManufacturer')}
                         {renderInput('Model / รุ่น', 'model')}
                       </div>
                     </div>
@@ -1290,12 +1339,6 @@ export default function InspectionTab() {
                     </div>
                   </div>
 
-                  {/* Additional Options */}
-                  <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col sm:flex-row gap-6">
-                    {renderCheckbox('Auto Gear more than 6 Speed', 'autoGearMoreThan6')}
-                    {renderCheckbox('Paddle Shift', 'paddleShift')}
-                  </div>
-
                   {/* Sponsors Sticker Check */}
                   <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 relative w-full">
                     <div className="flex justify-between items-center mb-6">
@@ -1326,8 +1369,9 @@ export default function InspectionTab() {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 gap-4 mt-2">
-                      {renderCheckbox('Have All Stickers', 'stickers.haveAllStickers')}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                      {renderCheckbox('Have All Sticker/มีสติกเกอร์ครบแล้ว', 'stickers.haveAllStickers')}
+                      {renderCheckbox('Still Need Sticker/ต้องการสติกเกอร์', 'stickers.stillNeedSticker')}
                     </div>
                   </div>
                 </motion.div>
@@ -1556,59 +1600,59 @@ export default function InspectionTab() {
 
                   <div className="pt-6 border-t border-slate-100">
                     <h3 className="text-sm font-medium text-slate-900 mb-4">Car Equipment / อุปกรณ์ประจำรถ</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Tow Point / จุดลากจูง</span>
-                        <div className="flex gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-sm font-medium text-slate-900">Tow Point / จุดลากจูง</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.towPoint.installed')}
                           {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.towPoint.sticker')}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Bonnet Lock / สลักล็อคฝากระโปรง</span>
-                        <div className="flex gap-4">
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-sm font-medium text-slate-900">Bonnet Lock / สลักล็อคฝากระโปรง</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.bonnetLock.installed')}
                           {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.bonnetLock.sticker')}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Extinguisher / ถังดับเพลิง</span>
-                        <div className="flex gap-4">
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-sm font-medium text-slate-900">Extinguisher / ถังดับเพลิง</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.extinguisher.installed')}
                           {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.extinguisher.sticker')}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Outside Kill Switch / สวิตช์ตัดไฟภายนอก</span>
-                        <div className="flex gap-4">
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-sm font-medium text-slate-900">Outside Kill Switch / สวิตช์ตัดไฟภายนอก</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.outsideKillSwitch.installed')}
                           {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.outsideKillSwitch.sticker')}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Inside Kill Switch / สวิตช์ตัดไฟภายใน</span>
-                        <div className="flex gap-4">
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-sm font-medium text-slate-900">Inside Kill Switch / สวิตช์ตัดไฟภายใน</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.insideKillSwitch.installed')}
                           {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.insideKillSwitch.sticker')}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Seat / เบาะนั่ง</span>
-                        <div className="flex gap-4">
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-sm font-medium text-slate-900">Seat / เบาะนั่ง</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.seat.installed')}
                           {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.seat.sticker')}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Harnesses / เข็มขัดนิรภัย</span>
-                        <div className="flex gap-4">
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-sm font-medium text-slate-900">Harnesses / เข็มขัดนิรภัย</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.harnesses.installed')}
                           {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.harnesses.sticker')}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Roll Over Bar / โรลบาร์</span>
-                        <div className="flex gap-4">
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-sm font-medium text-slate-900">Roll Over Bar / โรลบาร์</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {renderCheckbox('Installed / ติดตั้งแล้ว', 'carEquipment.rollOverBar.installed')}
                           {renderCheckbox('Sticker / สติ๊กเกอร์', 'carEquipment.rollOverBar.sticker')}
                         </div>
@@ -1634,6 +1678,14 @@ export default function InspectionTab() {
                   </div>
 
                   {renderInput('Remark / หมายเหตุ', 'remark')}
+
+                  <div className="pt-6 border-t border-slate-100">
+                    <h3 className="text-sm font-medium text-slate-900 mb-4">Picture / รูปภาพประกอบ</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {renderFileUpload('Car Photo', 'Upload a photo of the car')}
+                      {renderFileUpload('Inspection Document', 'Upload any relevant inspection documents')}
+                    </div>
+                  </div>
                 </motion.div>
               )}
 
@@ -1688,18 +1740,10 @@ export default function InspectionTab() {
                         {renderInput('Current Engine Seal Number / หมายเลขซีลเครื่องยนต์เดิม', 'currentEngineSealNumber')}
                         {renderInput('New Engine Seal Number / หมายเลขซีลเครื่องยนต์ใหม่', 'newEngineSealNumber')}
                         <div className="md:col-span-2">
-                          {renderInput('Reason for changing seal / เหตุผลที่เปลี่ยนซีล', 'reasonForChangingSeal')}
+                           {renderInput('Reason for changing seal / เหตุผลที่เปลี่ยนซีล', 'reasonForChangingSeal')}
                         </div>
                       </div>
                     )}
-                  </div>
-
-                  <div className="pt-6 border-t border-slate-100">
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Uploaded Pictures</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {renderFileUpload('Car Photo', 'Upload a photo of the car')}
-                      {renderFileUpload('Inspection Document', 'Upload any relevant inspection documents')}
-                    </div>
                   </div>
                 </motion.div>
               )}
@@ -1783,7 +1827,7 @@ export default function InspectionTab() {
             
             {currentStep < totalSteps ? (
               <button 
-                onClick={() => setCurrentStep(prev => prev + 1)}
+                onClick={handleNextStep}
                 className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10"
               >
                 Continue

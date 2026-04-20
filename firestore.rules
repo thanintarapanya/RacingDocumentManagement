@@ -86,9 +86,8 @@ service cloud.firestore {
              data.userId is string && data.updatedAt is string;
     }
 
-    function isValidSettings(data) {
-      return hasRequiredFields(['topics']) &&
-             data.topics is list;
+    function isValidSettings(data, settingId) {
+      return settingId == 'weight_rules' || !('topics' in data) || data.topics is list;
     }
 
     function isValidCarInspection(data) {
@@ -209,8 +208,8 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() && isValidSettings(request.resource.data);
-      allow update: if isAdmin() && isValidSettings(request.resource.data);
+      allow create: if isAdmin() && isValidSettings(request.resource.data, settingId);
+      allow update: if isAdmin() && isValidSettings(request.resource.data, settingId);
       allow delete: if isAdmin();
     }
 

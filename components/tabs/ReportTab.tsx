@@ -65,7 +65,7 @@ const initialFormData = {
   series: '',
   grades: '',
   event: '',
-  eventYear: '',
+  eventYear: new Date().getFullYear().toString(),
   passedCars: [] as PassedCar[],
   failedCars: [] as FailedCar[],
 };
@@ -748,11 +748,19 @@ export default function ReportTab() {
                       {renderSelect('Report Session / รอบการแข่งขัน', 'reportSession', ['Qualify', 'Post-Qualify', 'Post-Race', 'Special Case'])}
                       {renderInput('Race / เรซ', 'race')}
                       {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3'])}
-                      {renderSelect('Year / ปีการแข่งขัน', 'eventYear', ['2024', '2025', '2026', '2027', '2028'])}
+                      <div className="space-y-2">
+                        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Year / ปีการแข่งขัน</label>
+                        <input 
+                          type="text"
+                          value={formData.eventYear || ''}
+                          disabled
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all opacity-60 cursor-not-allowed"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-6">
                       {renderRadioGroup('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
-                      {renderRadioGroup('Grades / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
+                      {renderRadioGroup('Classes / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
                     </div>
                   </div>
                 </motion.div>
