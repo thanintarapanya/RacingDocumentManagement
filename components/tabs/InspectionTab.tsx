@@ -162,7 +162,9 @@ const initialFormData = {
     weight: number;
     isChecked: boolean;
     isCustom?: boolean;
-  }>
+  }>,
+  customTablesData: [] as any[],
+  customTablesSelections: {} as Record<string, string | string[]>
 };
 
 export default function InspectionTab() {
@@ -290,6 +292,7 @@ export default function InspectionTab() {
 
         let currentBase = oldBase;
         let currentDyn = oldDyn;
+        let currentCustomTables: any[] = [];
 
         if (fetchedCustomRules) {
           if (fetchedCustomRules.baseWeightPresets?.[formData.series]) {
@@ -301,7 +304,7 @@ export default function InspectionTab() {
                 const title = conf.columns.join(' | ');
                 let condition = conf.columns.map((c: string) => r.values[c] || '-').join(' | ');
                 if (r.committeeWeight && r.committeeWeight.trim() !== '') {
-                  condition += ` (Committee: ${r.committeeWeight})`;
+                  condition += ` (Vary: ${r.committeeWeight})`;
                 }
                 return { title, condition, weight: r.weight };
               });
@@ -310,13 +313,18 @@ export default function InspectionTab() {
           if (fetchedCustomRules.weightPresets?.[formData.series]?.length > 0) {
             currentDyn = fetchedCustomRules.weightPresets[formData.series];
           }
+          if (fetchedCustomRules.customTables?.[formData.series]?.length > 0) {
+             currentCustomTables = fetchedCustomRules.customTables[formData.series];
+          }
         }
 
         setFormData(prev => ({
           ...prev,
           baseWeightOptions: currentBase.map((p: any, i: number) => ({ ...p, id: Date.now() + 'b' + i, isCustom: false })),
           baseWeight: '',
-          dynamicWeights: currentDyn.map((p: any, i: number) => ({ ...p, id: Date.now() + 'd' + i, isChecked: false, isCustom: false }))
+          dynamicWeights: currentDyn.map((p: any, i: number) => ({ ...p, id: Date.now() + 'd' + i, isChecked: false, isCustom: false })),
+          customTablesData: currentCustomTables.map(t => ({...t})),
+          customTablesSelections: {}
         }));
       }
 
@@ -588,6 +596,35 @@ export default function InspectionTab() {
     if (normalized.includes('gtmc')) return 'https://placehold.co/1200x800/a855f7/ffffff?text=SIAM+GTMC+Sticker+Guide';
     if (normalized.includes('gtrc')) return 'https://placehold.co/1200x800/f97316/ffffff?text=SIAM+GTRC+Sticker+Guide';
     return 'https://placehold.co/1200x800/64748b/ffffff?text=General+Sticker+Guide';
+  };
+
+  const calculateTotalWeight = () => {
+    let total = Number(formData.baseWeight || 0);
+    
+    // Dynamic Weights
+    if (formData.dynamicWeights) {
+      total += formData.dynamicWeights.reduce((acc: number, curr: { isChecked: boolean, weight: number }) => {
+        return acc + (curr.isChecked ? Number(curr.weight) : 0);
+      }, 0);
+    }
+
+    // Custom Table Selections
+    if (formData.customTablesData && formData.customTablesSelections) {
+      formData.customTablesData.forEach((table: any) => {
+        const selections = formData.customTablesSelections[table.id];
+        if (selections) {
+          table.rows.forEach((row: any) => {
+            const isSelected = table.selectionType === 'single' ? selections === row.id : (Array.isArray(selections) && selections.includes(row.id));
+            if (isSelected) {
+              if (table.hasWeight) total += Number(row.weight || 0);
+              if (table.hasCommitteeWeight) total += Number(row.committeeWeight || 0);
+            }
+          });
+        }
+      });
+    }
+
+    return total;
   };
 
   const isFieldInvalid = (field: string) => {
@@ -1573,6 +1610,57 @@ export default function InspectionTab() {
                     </div>
                   </div>
 
+                  {/* Custom Tables Mapping */}
+                  {formData.customTablesData && formData.customTablesData.length > 0 && formData.customTablesData.map((table: any) => (
+                    <div key={table.id} className="mt-8">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">{table.title}</h3>
+                      </div>
+                      <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                        {table.rows.map((row: any) => {
+                          const condition = table.columns.map((c: string) => row.values[c] || '-').join(' | ');
+                          let labelAdd = '';
+                          if (table.hasCommitteeWeight && row.committeeWeight) labelAdd = ` (+${row.committeeWeight}kg Vary Weight)`;
+
+                          const isChecked = table.selectionType === 'single' 
+                              ? formData.customTablesSelections?.[table.id] === row.id 
+                              : formData.customTablesSelections?.[table.id]?.includes(row.id);
+                              
+                          return (
+                            <label key={row.id} className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-all ${isChecked ? 'border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                              <div className="flex items-center gap-3">
+                                 <input 
+                                   type={table.selectionType === 'single' ? 'radio' : 'checkbox'} 
+                                   checked={isChecked || false}
+                                   onChange={(e) => {
+                                     const newSelections = { ...(formData.customTablesSelections || {}) };
+                                     if (table.selectionType === 'single') {
+                                       newSelections[table.id] = row.id;
+                                     } else {
+                                       let currentArr = newSelections[table.id] || [];
+                                       if (!Array.isArray(currentArr)) currentArr = [currentArr as string];
+                                       if (e.target.checked) {
+                                         newSelections[table.id] = [...currentArr, row.id];
+                                       } else {
+                                         newSelections[table.id] = currentArr.filter((rId: string) => rId !== row.id);
+                                       }
+                                     }
+                                     handleChange('customTablesSelections', newSelections);
+                                   }}
+                                   className={`border-slate-300 text-orange-500 focus:ring-orange-500 w-4 h-4 ${table.selectionType === 'single' ? 'rounded-full' : 'rounded'}`}
+                                 />
+                                 <div>
+                                    <p className="text-sm font-medium text-slate-900 leading-none mb-1.5">{condition} {labelAdd}</p>
+                                 </div>
+                              </div>
+                              {table.hasWeight && <span className="font-mono text-sm font-medium text-slate-700 bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-md">{row.weight} kg</span>}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
                   <div className="relative mt-8">
                     <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-rose-500 rounded-2xl blur opacity-20"></div>
                     <div className="relative bg-white/80 backdrop-blur-xl border border-white/50 shadow-sm p-6 sm:p-8 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1582,7 +1670,7 @@ export default function InspectionTab() {
                       </div>
                       <div className="flex items-baseline gap-2">
                         <span className="text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-rose-600">
-                          {Number(formData.baseWeight || 0) + (formData.dynamicWeights || []).reduce((acc: number, curr: { isChecked: boolean, weight: number }) => acc + (curr.isChecked ? Number(curr.weight) : 0), 0)}
+                          {calculateTotalWeight()}
                         </span>
                         <span className="text-xl font-bold text-orange-400">kg</span>
                       </div>

@@ -225,10 +225,6 @@ export default function EntryFormTab() {
     });
   };
 
-  const handleNext = () => {
-    if (currentStep < 5) setCurrentStep(prev => prev + 1);
-  };
-
   const handleBack = () => {
     if (currentStep > 1) setCurrentStep(prev => prev - 1);
   };
@@ -382,7 +378,40 @@ export default function EntryFormTab() {
     }, 500);
   };
 
-  // Render Helpers
+  const [showValidation, setShowValidation] = useState(false);
+
+  const getMissingFields = (step: number) => {
+    const missing = [];
+    if (step === 1) {
+      if (!formData.event) missing.push('event');
+      if (!formData.eventYear) missing.push('eventYear');
+      if (!formData.series) missing.push('series');
+      if (!formData.grade) missing.push('grade');
+      if (!formData.carNumber) missing.push('carNumber');
+    }
+    if (step === 2) {
+      if (!formData.nameThai && !formData.nameEnglish) missing.push('nameThai');
+      if (!formData.surnameThai && !formData.surnameEnglish) missing.push('surnameThai');
+    }
+    return missing;
+  };
+
+  const handleNext = () => {
+    const missing = getMissingFields(currentStep);
+    if (missing.length > 0) {
+      setShowValidation(true);
+      return;
+    }
+    setShowValidation(false);
+    setCurrentStep(prev => prev + 1);
+  };
+
+  const isFieldInvalid = (field: string) => {
+    if (!showValidation) return false;
+    const isMissing = (val: any) => val === undefined || val === null || val === '';
+    return isMissing(formData[field as keyof typeof formData]);
+  };
+
   const renderInput = (label: string, field: keyof typeof formData, type = 'text', placeholder = '', className = '') => (
     <div className={`space-y-2 ${className}`}>
       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
@@ -390,7 +419,11 @@ export default function EntryFormTab() {
         type={type} 
         value={formData[field]}
         onChange={(e) => handleChange(field, e.target.value)}
-        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+        className={`w-full bg-slate-50/50 border rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed ${
+          isFieldInvalid(field) 
+            ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-4 focus:ring-red-100/50' 
+            : 'border-slate-100 focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50'
+        }`}
         placeholder={placeholder || label}
         disabled={!canEditField(field)}
       />
@@ -403,7 +436,11 @@ export default function EntryFormTab() {
       <select 
         value={formData[field]}
         onChange={(e) => handleChange(field, e.target.value)}
-        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
+        className={`w-full bg-slate-50/50 border rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed ${
+          isFieldInvalid(field) 
+            ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-4 focus:ring-red-100/50' 
+            : 'border-slate-100 focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50'
+        }`}
         disabled={!canEditField(field)}
       >
         <option value="" disabled>Select {label}</option>
