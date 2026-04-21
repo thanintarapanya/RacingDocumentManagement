@@ -292,8 +292,20 @@ export default function InspectionTab() {
         let currentDyn = oldDyn;
 
         if (fetchedCustomRules) {
-          if (fetchedCustomRules.baseWeightPresets?.[formData.series]?.length > 0) {
-            currentBase = fetchedCustomRules.baseWeightPresets[formData.series];
+          if (fetchedCustomRules.baseWeightPresets?.[formData.series]) {
+            const conf = fetchedCustomRules.baseWeightPresets[formData.series];
+            if (Array.isArray(conf) && conf.length > 0) {
+              currentBase = conf;
+            } else if (conf.rows && conf.rows.length > 0) {
+              currentBase = conf.rows.map((r: any) => {
+                const title = conf.columns.join(' | ');
+                let condition = conf.columns.map((c: string) => r.values[c] || '-').join(' | ');
+                if (r.committeeWeight && r.committeeWeight.trim() !== '') {
+                  condition += ` (Committee: ${r.committeeWeight})`;
+                }
+                return { title, condition, weight: r.weight };
+              });
+            }
           }
           if (fetchedCustomRules.weightPresets?.[formData.series]?.length > 0) {
             currentDyn = fetchedCustomRules.weightPresets[formData.series];

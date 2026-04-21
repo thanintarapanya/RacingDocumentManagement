@@ -76,26 +76,89 @@ export default function RulesSettings() {
     }
   };
 
-  const handleBaseWeightChange = (series: string, index: number, field: string, value: any) => {
-    const newConfig = { ...config };
-    if (!newConfig.baseWeightPresets[series]) newConfig.baseWeightPresets[series] = [];
-    newConfig.baseWeightPresets[series][index] = { ...newConfig.baseWeightPresets[series][index], [field]: value };
-    setConfig(newConfig);
+  const getBaseWeightsConf = (series: string) => {
+    let conf = config.baseWeightPresets[series];
+    // Migrate old array into new format if necessary
+    if (!conf || Array.isArray(conf)) {
+      const rows: any[] = [];
+      if (Array.isArray(conf)) {
+        conf.forEach((item: any) => {
+          rows.push({
+            id: Math.random().toString(36).substr(2, 9),
+            values: {
+              'Category': item.title || '',
+              'Condition Details': item.condition || ''
+            },
+            weight: String(item.weight || ''),
+            committeeWeight: ''
+          });
+        });
+      }
+      return {
+        columns: Array.isArray(conf) && conf.length > 0 ? ['Category', 'Condition Details'] : [],
+        rows: rows
+      };
+    }
+    return conf;
   };
 
-  const addBaseWeight = (series: string) => {
+  const handleBaseWeightAddColumn = () => {
+    const colName = window.prompt('Enter new condition column name (e.g. Engine Capacity, Drivetrain):');
+    if (!colName || colName.trim() === '') return;
     const newConfig = { ...config };
-    if (!newConfig.baseWeightPresets[series]) newConfig.baseWeightPresets[series] = [];
-    newConfig.baseWeightPresets[series].push({ title: '', condition: '', weight: 0 });
-    setConfig(newConfig);
-  };
-
-  const removeBaseWeight = (series: string, index: number) => {
-    const newConfig = { ...config };
-    if (newConfig.baseWeightPresets[series]) {
-      newConfig.baseWeightPresets[series].splice(index, 1);
+    const conf = getBaseWeightsConf(activeSeriesTab);
+    if (!conf.columns.includes(colName)) {
+      conf.columns.push(colName);
+      newConfig.baseWeightPresets[activeSeriesTab] = conf;
       setConfig(newConfig);
     }
+  };
+
+  const handleBaseWeightRemoveColumn = (colName: string) => {
+    if (!window.confirm(`Remove column "${colName}"?`)) return;
+    const newConfig = { ...config };
+    const conf = getBaseWeightsConf(activeSeriesTab);
+    conf.columns = conf.columns.filter((c: string) => c !== colName);
+    conf.rows.forEach((r: any) => delete r.values[colName]);
+    newConfig.baseWeightPresets[activeSeriesTab] = conf;
+    setConfig(newConfig);
+  };
+
+  const handleBaseWeightAddRow = () => {
+    const newConfig = { ...config };
+    const conf = getBaseWeightsConf(activeSeriesTab);
+    conf.rows.push({
+      id: Math.random().toString(36).substr(2, 9),
+      values: {},
+      weight: '',
+      committeeWeight: ''
+    });
+    newConfig.baseWeightPresets[activeSeriesTab] = conf;
+    setConfig(newConfig);
+  };
+
+  const handleBaseWeightRemoveRow = (idx: number) => {
+    const newConfig = { ...config };
+    const conf = getBaseWeightsConf(activeSeriesTab);
+    conf.rows.splice(idx, 1);
+    newConfig.baseWeightPresets[activeSeriesTab] = conf;
+    setConfig(newConfig);
+  };
+
+  const handleBaseWeightRowChange = (idx: number, field: 'weight'|'committeeWeight', value: string) => {
+    const newConfig = { ...config };
+    const conf = getBaseWeightsConf(activeSeriesTab);
+    conf.rows[idx][field] = value;
+    newConfig.baseWeightPresets[activeSeriesTab] = conf;
+    setConfig(newConfig);
+  };
+
+  const handleBaseWeightValueChange = (idx: number, colName: string, value: string) => {
+    const newConfig = { ...config };
+    const conf = getBaseWeightsConf(activeSeriesTab);
+    conf.rows[idx].values[colName] = value;
+    newConfig.baseWeightPresets[activeSeriesTab] = conf;
+    setConfig(newConfig);
   };
 
   const handleDynamicWeightChange = (series: string, index: number, field: string, value: any) => {
@@ -128,7 +191,7 @@ export default function RulesSettings() {
     );
   }
 
-  const currentBaseWeights = config.baseWeightPresets[activeSeriesTab] || [];
+  const currentBaseWeightsConf = getBaseWeightsConf(activeSeriesTab);
   const currentDynamicWeights = config.weightPresets[activeSeriesTab] || [];
 
   return (
@@ -190,59 +253,104 @@ export default function RulesSettings() {
             {/* Base Minimum Weights */}
             <div>
               <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
-                <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-widest">Base Minimum Weights</h4>
-                <button 
-                  onClick={() => addBaseWeight(activeSeriesTab)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-100 border border-slate-200 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Base Weight
-                </button>
+                <div className="flex flex-col">
+                  <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-widest">Base Minimum Weights</h4>
+                  <p className="text-xs text-slate-500 mt-1">Configure columns based on the series&apos; unique conditions.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={handleBaseWeightAddColumn}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-100 border border-slate-200 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Category Column
+                  </button>
+                  <button 
+                    onClick={handleBaseWeightAddRow}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-100 border border-orange-200 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Rule Row
+                  </button>
+                </div>
               </div>
               
-              <div className="space-y-3">
-                {currentBaseWeights.length === 0 && (
-                  <p className="text-sm text-slate-400 py-4 text-center border border-dashed border-slate-200 rounded-xl">No base weights configured.</p>
-                )}
-                {currentBaseWeights.map((w: BaseWeightOption, idx: number) => (
-                  <div key={idx} className="flex flex-wrap md:flex-nowrap items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <div className="flex-1 w-full relative">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 absolute left-3 top-1.5">Category</label>
-                      <input 
-                        type="text" 
-                        value={w.title} 
-                        onChange={(e) => handleBaseWeightChange(activeSeriesTab, idx, 'title', e.target.value)}
-                        className="w-full pl-3 pr-3 pt-6 pb-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" 
-                        placeholder="e.g. ความจุรถ"
-                      />
-                    </div>
-                    <div className="flex-[2] w-full relative">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 absolute left-3 top-1.5">Condition Details</label>
-                      <input 
-                        type="text" 
-                        value={w.condition} 
-                        onChange={(e) => handleBaseWeightChange(activeSeriesTab, idx, 'condition', e.target.value)}
-                        className="w-full pl-3 pr-3 pt-6 pb-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" 
-                        placeholder="e.g. ไม่เกิน 1,210 cc."
-                      />
-                    </div>
-                    <div className="flex-1 min-w-[120px] relative">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 absolute left-3 top-1.5">Weight (kg)</label>
-                      <input 
-                        type="number" 
-                        value={w.weight} 
-                        onChange={(e) => handleBaseWeightChange(activeSeriesTab, idx, 'weight', Number(e.target.value))}
-                        className="w-full pl-3 pr-8 pt-6 pb-2 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" 
-                      />
-                      <span className="absolute right-3 top-1/2 mt-1 -translate-y-1/2 text-xs text-slate-400">kg</span>
-                    </div>
-                    <button 
-                      onClick={() => removeBaseWeight(activeSeriesTab, idx)}
-                      className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              <div className="space-y-4">
+                {currentBaseWeightsConf.columns.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <span className="text-xs font-medium text-slate-500 mr-2 flex items-center">Active Condition Columns:</span>
+                    {currentBaseWeightsConf.columns.map((col: string) => (
+                      <div key={col} className="flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">
+                        <span className="text-xs font-medium text-slate-700">{col}</span>
+                        <button onClick={() => handleBaseWeightRemoveColumn(col)} className="text-slate-400 hover:text-red-500 ml-1">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+
+                {currentBaseWeightsConf.rows.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-4 text-center border border-dashed border-slate-200 rounded-xl">No base weights configured.</p>
+                ) : currentBaseWeightsConf.columns.length === 0 ? (
+                  <p className="text-sm text-amber-500 py-4 text-center border border-dashed border-amber-200 bg-amber-50 rounded-xl">Please add a Condition Column first to start defining rules.</p>
+                ) : (
+                  <div className="overflow-x-auto pb-4">
+                    <table className="w-full text-left bg-white border border-slate-200 rounded-xl text-sm whitespace-nowrap">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium text-xs uppercase tracking-wider">
+                        <tr>
+                          {currentBaseWeightsConf.columns.map((col: string) => (
+                            <th key={col} className="px-4 py-3 min-w-[150px]">{col}</th>
+                          ))}
+                          <th className="px-4 py-3 min-w-[120px] border-l border-slate-200">Min. Weight (kg)</th>
+                          <th className="px-4 py-3 min-w-[150px]">Committee Weight (+kg)</th>
+                          <th className="px-4 py-3 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {currentBaseWeightsConf.rows.map((row: any, idx: number) => (
+                          <tr key={row.id || idx} className="hover:bg-slate-50/50">
+                            {currentBaseWeightsConf.columns.map((col: string) => (
+                              <td key={col} className="px-4 py-2">
+                                <input 
+                                  type="text" 
+                                  value={row.values[col] || ''} 
+                                  onChange={(e) => handleBaseWeightValueChange(idx, col, e.target.value)}
+                                  className="w-full px-2 py-1.5 border border-slate-200 rounded focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all placeholder-slate-300"
+                                  placeholder="e.g. 4 สูบ / Turbo"
+                                />
+                              </td>
+                            ))}
+                            <td className="px-4 py-2 border-l border-slate-200">
+                              <input 
+                                type="text" 
+                                value={row.weight || ''} 
+                                onChange={(e) => handleBaseWeightRowChange(idx, 'weight', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all font-mono placeholder-slate-300"
+                                placeholder="e.g. 1040 or -"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input 
+                                type="text" 
+                                value={row.committeeWeight || ''} 
+                                onChange={(e) => handleBaseWeightRowChange(idx, 'committeeWeight', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all font-mono placeholder-slate-300"
+                                placeholder="e.g. +100kg"
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-right">
+                              <button 
+                                onClick={() => handleBaseWeightRemoveRow(idx)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
 
