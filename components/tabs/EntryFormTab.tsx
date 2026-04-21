@@ -206,7 +206,7 @@ export default function EntryFormTab() {
     if (signaturePadRef.current?.isEmpty()) {
        setFormData(prev => ({ ...prev, digitalSignature: '' }));
     } else {
-       const dataUrl = signaturePadRef.current?.getTrimmedCanvas().toDataURL('image/png');
+       const dataUrl = signaturePadRef.current?.getTrimmedCanvas().toDataURL('image/png') || '';
        setFormData(prev => ({ ...prev, digitalSignature: dataUrl }));
     }
   };
