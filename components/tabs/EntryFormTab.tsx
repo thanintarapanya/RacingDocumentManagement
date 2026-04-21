@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
+import SignatureCanvas from 'react-signature-canvas';
 import { useAppStore, type Entry } from '@/lib/store';
 import { auth } from '@/firebase';
 import { 
@@ -191,7 +192,24 @@ export default function EntryFormTab() {
     // Step 5
     consentingParty: '',
     signDate: '',
+    digitalSignature: '',
   });
+
+  const signaturePadRef = useRef<SignatureCanvas>(null);
+
+  const handleClearSignature = () => {
+    signaturePadRef.current?.clear();
+    setFormData(prev => ({ ...prev, digitalSignature: '' }));
+  };
+
+  const handleSignatureEnd = () => {
+    if (signaturePadRef.current?.isEmpty()) {
+       setFormData(prev => ({ ...prev, digitalSignature: '' }));
+    } else {
+       const dataUrl = signaturePadRef.current?.getTrimmedCanvas().toDataURL('image/png');
+       setFormData(prev => ({ ...prev, digitalSignature: dataUrl }));
+    }
+  };
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => {
@@ -250,7 +268,7 @@ export default function EntryFormTab() {
           series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: new Date().getFullYear().toString(),
           nameThai: '', surnameThai: '', nameEnglish: '', surnameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
           competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
-          consentingParty: '', signDate: '',
+          consentingParty: '', signDate: '', digitalSignature: '',
         });
       }, 2000);
     }, 1500);
@@ -534,7 +552,7 @@ export default function EntryFormTab() {
                   series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: new Date().getFullYear().toString(),
                   nameThai: '', surnameThai: '', nameEnglish: '', surnameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
                   competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
-                  consentingParty: '', signDate: '',
+                  consentingParty: '', signDate: '', digitalSignature: '',
                 });
                 setCurrentStep(1);
                 setView('form');
@@ -1004,6 +1022,16 @@ export default function EntryFormTab() {
                 <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Date of Signing</h4>
                 <div className="text-sm font-light text-slate-600">{formData.signDate || '-'}</div>
               </div>
+              <div className="md:col-span-2">
+                <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Digital Signature</h4>
+                {formData.digitalSignature ? (
+                  <div className="border border-slate-200 rounded-lg p-2 inline-block">
+                    <Image src={formData.digitalSignature} alt="Digital Signature" width={300} height={150} className="max-w-[300px] h-auto object-contain" />
+                  </div>
+                ) : (
+                  <div className="text-sm font-light text-slate-400 italic">No signature provided</div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1149,12 +1177,12 @@ export default function EntryFormTab() {
               {currentStep === 4 && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderFileUpload('1. Copy of ID Card / Passport')}
-                    {renderFileUpload('2. Copy of Competition License')}
-                    {renderFileUpload('3. Medical Certificate')}
-                    {renderFileUpload('4. Driver Photo (1 inch)')}
-                    {renderFileUpload('5. Car Photo (Front, Back, Left, Right)')}
-                    {renderFileUpload('6. Other Document')}
+                    {renderFileUpload('1. Copy of ID Card / Passport / สำเนาบัตรประชาชน / พาสปอร์ต')}
+                    {renderFileUpload('2. Copy of Competition License / สำเนาใบอนุญาตขับขี่แข่งรถ')}
+                    {renderFileUpload('3. Medical Certificate / ใบรับรองแพทย์')}
+                    {renderFileUpload('4. Driver Photo (1 inch) / รูปถ่ายนักขับ (1 นิ้ว)')}
+                    {renderFileUpload('5. Car Photo (Front, Back, Left, Right) / รูปถ่ายรถ (หน้า, หลัง, ซ้าย, ขวา)')}
+                    {renderFileUpload('6. Other Document / เอกสารอื่นๆ')}
                   </div>
                 </div>
               )}
@@ -1165,11 +1193,20 @@ export default function EntryFormTab() {
                     <p>
                       I hereby agree not to claim any damages resulting from accidents during the competition and agree to be fully responsible for any damages, on behalf of the organizer of the competition and all parties involved in organizing the event, including the venue owner, sponsors, donors of the event, and all officials, representatives, and agents of the aforementioned, in the event of legal proceedings, claims for compensation, expenses, or costs that may arise from the litigation or legal actions, as well as claims for damages related to death, injury, loss, or other damages to the person or property of the competitor. This applies regardless of whether the damages result from or are connected with the approval of the application or participation in this competition, and regardless of whether such damages occurred due to the actions or negligence of the aforementioned legal entities, employees, agents, representatives, or other parties.
                     </p>
+                    <p className="text-slate-500">
+                      ข้าพเจ้าขอตกลงที่จะไม่เรียกร้องค่าเสียหายใดๆ อันเกิดจากอุบัติเหตุระหว่างการแข่งขัน และยินยอมรับผิดชอบต่อความเสียหายใดๆ แต่เพียงผู้เดียว ในนามของผู้จัดการแข่งขัน และทุกฝ่ายที่เกี่ยวข้องกับการจัดงาน รวมถึงเจ้าของสถานที่ ผู้สนับสนุน ผู้บริจาคของงาน และเจ้าหน้าที่ ตัวแทน ตลอดจนตัวแทนของบุคคลที่กล่าวถึงข้างต้นทั้งหมด ในกรณีที่มีการดำเนินคดีตามกฎหมาย การเรียกร้องค่าสินไหมทดแทน ค่าใช้จ่าย หรือต้นทุนที่อาจเกิดจากการฟ้องร้องหรือการกระทำทางกฎหมาย รวมถึงการเรียกร้องค่าเสียหายที่เกี่ยวข้องกับการเสียชีวิต การบาดเจ็บ การสูญเสีย หรือความเสียหายอื่นใดต่อบุคคลหรือทรัพย์สินของผู้เข้าแข่งขัน ทั้งนี้ ไม่ว่าความเสียหายนั้นจะเกิดจากหรือมีความเกี่ยวข้องกับการอนุมัติใบสมัครหรือการเข้าร่วมในการแข่งขันนี้ และไม่ว่าความเสียหายดังกล่าวจะเกิดขึ้นจากการกระทำหรือความประมาทเลินเล่อของนิติบุคคล พนักงาน ตัวแทน ผู้แทน หรือบุคคลอ้างอิงข้างต้นก็ตาม
+                    </p>
                     <p>
                       I consent to the company collecting, using, and/or disclosing my personal data, and I also consent to the collection of my personal data in the above-mentioned documents for the purpose of registering for the PT MAXNITRON RACING SERIES road racing competition, both for myself as a competitor and for the team. This consent is in accordance with the Personal Data Protection Act B.E. 2562 (2019) or other applicable laws and regulations. I also agree to allow the verification of the accuracy of the competition registration details.
                     </p>
+                    <p className="text-slate-500">
+                      ข้าพเจ้ายินยอมให้บริษัทเก็บรวบรวม ใช้ และ/หรือเปิดเผยข้อมูลส่วนบุคคลของข้าพเจ้า และยินยอมให้จัดเก็บข้อมูลส่วนบุคคลของข้าพเจ้าในเอกสารที่กล่าวถึงข้างต้นเพื่อวัตถุประสงค์ในการลงทะเบียนเข้าร่วมการแข่งขันรถยนต์ทางเรียบรายการ PT MAXNITRON RACING SERIES ทั้งในส่วนของข้าพเจ้าในฐานะผู้เข้าแข่งขันและสำหรับทีม การให้ความยินยอมนี้เป็นไปตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (2019) หรือกฎหมายและข้อบังคับอื่น ๆ ที่เกี่ยวข้อง ข้าพเจ้ายังตกลงที่จะอนุญาตให้มีการตรวจสอบความถูกต้องของรายละเอียดการลงทะเบียนการแข่งขันครั้งนี้ด้วย
+                    </p>
                     <p className="font-medium text-slate-900">
                       I hereby sign to acknowledge and consent to the above-mentioned terms.
+                    </p>
+                    <p className="font-medium text-slate-700">
+                      ข้าพเจ้าลงลายมือชื่อไว้เพื่อเป็นการรับทราบและยินยอมตามข้อกำหนดที่กล่าวมาข้างต้น
                     </p>
                   </div>
 
@@ -1177,7 +1214,21 @@ export default function EntryFormTab() {
                     {renderInput('Consenting & Acknowledging Party / ผู้ยินยอมและรับทราบ', 'consentingParty')}
                     {renderInput('Sign Date / วันที่เซ็น', 'signDate', 'date')}
                     <div className="md:col-span-2">
-                      {renderFileUpload('Digital Signature', 'Please upload your signature as an image (JPG, PNG) or PDF file')}
+                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium block mb-2">Digital Signature / ลายเซ็นดิจิทัล</label>
+                      <div className="border border-slate-200 rounded-xl bg-white overflow-hidden p-2 relative">
+                        <SignatureCanvas 
+                          ref={signaturePadRef}
+                          canvasProps={{ className: "w-full h-40 rounded-lg cursor-crosshair bg-slate-50/50" }}
+                          onEnd={handleSignatureEnd}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleClearSignature}
+                          className="absolute bottom-4 right-4 bg-white border border-slate-200 text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm transition-all"
+                        >
+                          Clear / ลบ
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
