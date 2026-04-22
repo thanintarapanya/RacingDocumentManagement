@@ -1184,7 +1184,7 @@ export default function InspectionTab() {
                       className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative"
                     >
                       <td className="px-6 py-5 relative">
-                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 transition-opacity" />
                         <span className="text-sm text-slate-500 font-light">{index + 1}</span>
                       </td>
                       <td className="px-6 py-5">
@@ -1217,7 +1217,7 @@ export default function InspectionTab() {
                         </span>
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <div className="flex items-center justify-end gap-4 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-4 transition-opacity">
                           <button 
                             onClick={() => {
                               setSelectedHistoryCarNumber(item.carNumber);
@@ -1338,7 +1338,7 @@ export default function InspectionTab() {
                         className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative"
                       >
                         <td className="px-6 py-5 relative">
-                          <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 transition-opacity" />
                           <span className="text-sm text-slate-500 font-light">{index + 1}</span>
                         </td>
                         <td className="px-6 py-5">
@@ -1354,7 +1354,7 @@ export default function InspectionTab() {
                           <span className="text-sm text-slate-600 font-light">{item.racerName}</span>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-end gap-4 transition-opacity">
                             <button 
                               onClick={() => {
                                 setSelectedHistoryItem(item);

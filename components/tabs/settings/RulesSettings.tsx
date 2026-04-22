@@ -917,7 +917,7 @@ export default function RulesSettings() {
                         className="object-cover"
                         unoptimized
                       />
-                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-10">
+                      <div className="absolute inset-0 bg-slate-900/40 transition-opacity flex items-center justify-center gap-3 z-10">
                         <label className="bg-white text-slate-900 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer hover:bg-orange-50 transition-colors">
                           Replace Image
                           <input 

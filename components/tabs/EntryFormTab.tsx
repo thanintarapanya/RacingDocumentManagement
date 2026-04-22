@@ -737,7 +737,7 @@ export default function EntryFormTab() {
                       className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative"
                     >
                       <td className="px-6 py-5 relative">
-                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-500 transition-opacity" />
                         <div className="text-sm text-slate-500 font-light whitespace-pre-line">
                           {entry.created.replace(' ', '\n')}
                         </div>
@@ -763,7 +763,7 @@ export default function EntryFormTab() {
                         <span className="text-sm text-slate-900 font-medium">{entry.carNumber}</span>
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <div className="flex items-center justify-end gap-4 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-4 transition-opacity">
                           <button 
                             onClick={() => handleView(entry)}
                             className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
