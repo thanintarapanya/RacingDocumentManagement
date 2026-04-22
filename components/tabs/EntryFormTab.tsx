@@ -668,6 +668,7 @@ export default function EntryFormTab() {
                   nameThai: '', surnameThai: '', nameEnglish: '', surnameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
                   competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
                   consentingParty: '', signDate: '', digitalSignature: '',
+                  uploadedFileUrls: {},
                 });
                 setCurrentStep(1);
                 setView('form');
