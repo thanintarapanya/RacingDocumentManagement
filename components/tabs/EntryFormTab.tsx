@@ -478,7 +478,7 @@ export default function EntryFormTab() {
       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
       <input 
         type={type} 
-        value={formData[field]}
+        value={formData[field] as string}
         onChange={(e) => handleChange(field, e.target.value)}
         className={`w-full bg-slate-50/50 border rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed ${
           isFieldInvalid(field) 
@@ -495,7 +495,7 @@ export default function EntryFormTab() {
     <div className={`space-y-2 ${className}`}>
       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
       <select 
-        value={formData[field]}
+        value={formData[field] as string}
         onChange={(e) => handleChange(field, e.target.value)}
         className={`w-full bg-slate-50/50 border rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed ${
           isFieldInvalid(field) 
