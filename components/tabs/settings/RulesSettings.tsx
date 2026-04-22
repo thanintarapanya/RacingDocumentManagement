@@ -43,10 +43,24 @@ export default function RulesSettings() {
     weightPresets: {},
     customTables: {}
   });
+  const [tireBrands, setTireBrands] = useState<string[]>(['Yokohama', 'Hankook', 'Giti']);
 
   useEffect(() => {
     fetchRules();
+    fetchTireRules();
   }, []);
+
+  const fetchTireRules = async () => {
+    try {
+      const docRef = doc(db, 'settings', 'tire_rules');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists() && docSnap.data().brands) {
+        setTireBrands(docSnap.data().brands);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const fetchRules = async () => {
     setIsLoading(true);
@@ -74,6 +88,7 @@ export default function RulesSettings() {
     setIsSaving(true);
     try {
       await setDoc(doc(db, 'settings', 'weight_rules'), config);
+      await setDoc(doc(db, 'settings', 'tire_rules'), { brands: tireBrands });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'settings/weight_rules');
     } finally {
@@ -131,6 +146,22 @@ export default function RulesSettings() {
     const conf = getBaseWeightsConf(activeSeriesTab);
     conf.columns = conf.columns.filter((c: string) => c !== colName);
     conf.rows.forEach((r: any) => delete r.values[colName]);
+    newConfig.baseWeightPresets[activeSeriesTab] = conf;
+    setConfig(newConfig);
+  };
+
+  const moveBaseWeightColumn = (colIdx: number, direction: 'left' | 'right') => {
+    const newConfig = { ...config };
+    const conf = getBaseWeightsConf(activeSeriesTab);
+    const newColIdx = direction === 'left' ? colIdx - 1 : colIdx + 1;
+    if (newColIdx < 0 || newColIdx >= conf.columns.length) return;
+    
+    const columns = [...conf.columns];
+    const temp = columns[colIdx];
+    columns[colIdx] = columns[newColIdx];
+    columns[newColIdx] = temp;
+    conf.columns = columns;
+    
     newConfig.baseWeightPresets[activeSeriesTab] = conf;
     setConfig(newConfig);
   };
@@ -376,6 +407,17 @@ export default function RulesSettings() {
           <Scale className="w-4 h-4" />
           Weighting Rules
         </button>
+        <button
+          onClick={() => setActiveRuleTab('marking_tire')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeRuleTab === 'marking_tire'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+          }`}
+        >
+          <Plus className="w-4 h-4" />
+          Marking Tire
+        </button>
       </div>
 
       {activeRuleTab === 'weighting' && (
@@ -444,9 +486,19 @@ export default function RulesSettings() {
                 {currentBaseWeightsConf.columns.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                     <span className="text-xs font-medium text-slate-500 mr-2 flex items-center">Active Condition Columns:</span>
-                    {currentBaseWeightsConf.columns.map((col: string) => (
+                    {currentBaseWeightsConf.columns.map((col: string, colIdx: number) => (
                       <div key={col} className="flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">
+                        {colIdx > 0 && (
+                          <button onClick={() => moveBaseWeightColumn(colIdx, 'left')} className="text-slate-400 hover:text-orange-500 -ml-0.5">
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                        )}
                         <span className="text-xs font-medium text-slate-700">{col}</span>
+                        {colIdx < currentBaseWeightsConf.columns.length - 1 && (
+                          <button onClick={() => moveBaseWeightColumn(colIdx, 'right')} className="text-slate-400 hover:text-orange-500">
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        )}
                         <button onClick={() => handleBaseWeightRemoveColumn(col)} className="text-slate-400 hover:text-red-500 ml-1">
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -467,8 +519,8 @@ export default function RulesSettings() {
                           {currentBaseWeightsConf.columns.map((col: string) => (
                             <th key={col} className="px-4 py-3 min-w-[150px]">{col}</th>
                           ))}
-                          <th className="px-4 py-3 min-w-[120px] border-l border-slate-200">Min. Weight (kg)</th>
-                          <th className="px-4 py-3 min-w-[150px]">Committee Weight (+kg)</th>
+                          <th className="px-4 py-3 min-w-[120px] border-l border-slate-200">Fix weight (kg)</th>
+                          <th className="px-4 py-3 min-w-[150px]">Vary Weight (+kg)</th>
                           <th className="px-4 py-3 w-10"></th>
                         </tr>
                       </thead>
@@ -524,12 +576,12 @@ export default function RulesSettings() {
             {/* Dynamic Weights */}
             <div className="pt-4">
               <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
-                <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-widest">Dynamic Penalties / Bonuses</h4>
+                <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-widest">Dynamic Rules</h4>
                 <button 
                   onClick={() => addDynamicWeight(activeSeriesTab)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-100 border border-slate-200 transition-colors"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add Penalty
+                  <Plus className="w-3.5 h-3.5" /> Add Rule
                 </button>
               </div>
               
@@ -550,7 +602,7 @@ export default function RulesSettings() {
                       />
                     </div>
                     <div className="flex-[2] w-full relative">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 absolute left-3 top-1.5">Rule / Penalty</label>
+                      <label className="text-[10px] uppercase font-bold text-slate-400 absolute left-3 top-1.5">Rule</label>
                       <input 
                         type="text" 
                         value={w.condition} 
@@ -560,7 +612,7 @@ export default function RulesSettings() {
                       />
                     </div>
                     <div className="flex-1 min-w-[120px] relative">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 absolute left-3 top-1.5">Value (+/-)</label>
+                      <label className="text-[10px] uppercase font-bold text-slate-400 absolute left-3 top-1.5">Weight (+/-)</label>
                       <input 
                         type="number" 
                         value={w.weight} 
@@ -770,6 +822,71 @@ export default function RulesSettings() {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+      {activeRuleTab === 'marking_tire' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm overflow-hidden flex flex-col md:w-2/3 lg:w-1/2">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-light text-slate-900">Marking Tire Configuration</h3>
+              <p className="text-sm text-slate-500 mt-1">Configure the tire brands that can be used in the event.</p>
+            </div>
+            <button 
+              onClick={saveRules}
+              disabled={isSaving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save Changes
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-widest">Active Tire Brands</h4>
+              <button 
+                onClick={() => {
+                  setPromptModal({
+                    isOpen: true,
+                    title: 'Add New Tire Brand',
+                    placeholder: 'e.g. Michelin',
+                    value: '',
+                    onConfirm: (brand) => {
+                      if (!brand || brand.trim() === '') return;
+                      if (!tireBrands.includes(brand)) {
+                        setTireBrands([...tireBrands, brand]);
+                      }
+                    }
+                  });
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-100 border border-orange-200 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Brand
+              </button>
+            </div>
+            
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              {tireBrands.length === 0 ? (
+                <p className="text-sm text-slate-400 py-2 text-center">No tire brands configured. Add some above.</p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {tireBrands.map((brand: string, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto min-w-[200px]">
+                      <span className="font-medium text-slate-700">{brand}</span>
+                      <button 
+                        onClick={() => {
+                          setTireBrands(tireBrands.filter(b => b !== brand));
+                        }}
+                        className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors ml-4"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

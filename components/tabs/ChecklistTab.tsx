@@ -259,6 +259,12 @@ export default function ChecklistTab() {
           bValue = b.formData?.competitionLicenseNo || '';
         }
 
+        if (sortConfig.key.startsWith('topic_')) {
+          const topic = sortConfig.key.replace('topic_', '');
+          aValue = checklists[a.id]?.topics?.[topic]?.checked ? 1 : 0;
+          bValue = checklists[b.id]?.topics?.[topic]?.checked ? 1 : 0;
+        }
+
         if (aValue < bValue) {
           return sortConfig.direction === 'asc' ? -1 : 1;
         }
@@ -431,9 +437,14 @@ export default function ChecklistTab() {
                   <SortableHeader label="SERIES RACE / รุ่นการแข่งขัน" sortKey="seriesRace" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="GRADE RACE / คลาส" sortKey="gradeRace" sortConfig={sortConfig} requestSort={requestSort} />
                   {topics.map(topic => (
-                    <th key={topic} className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-center">
-                      {topic}
-                    </th>
+                    <SortableHeader 
+                      key={topic}
+                      label={topic} 
+                      sortKey={`topic_${topic}`} 
+                      sortConfig={sortConfig} 
+                      requestSort={requestSort} 
+                      align="center"
+                    />
                   ))}
                   <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-center">
                     LOGS

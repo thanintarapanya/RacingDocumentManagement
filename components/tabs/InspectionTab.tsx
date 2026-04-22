@@ -37,6 +37,14 @@ import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
 import { weightPresets, baseWeightPresets } from './weightPresets';
 
+// Sticker Guide Data Imports
+import stickerEco from '../stickers/Sticker_Layout_Eco';
+import stickerGTMC from '../stickers/Sticker_Layout_GTMC';
+import stickerGTRC from '../stickers/Sticker_Layout_GTRC';
+import stickerGroupA from '../stickers/Sticker_Layout_GroupA';
+import stickerGroupN from '../stickers/Sticker_Layout_GroupN';
+import stickerTruck from '../stickers/Sticker_Layout_Truck';
+
 type Inspection = {
   id: string;
   userId?: string;
@@ -109,7 +117,7 @@ const initialFormData = {
   stickers: { haveAllStickers: false, stillNeedSticker: false },
   engineCapacityWeight: {} as Record<string, { checked: boolean, weight: string, committeeWeight: string }>,
   carBrandCapacityRestrictor: {} as Record<string, { checked: boolean, weight: string }>,
-  tireMarkAmount: { yokohama: '', hankook: '', giti: '' },
+  tireMarkAmount: {} as Record<string, string>,
 
   // Step 3: Inspection
   carLight: { headLight: false, turnSignal: false, tailLight: false, breakLight: false },
@@ -262,6 +270,7 @@ export default function InspectionTab() {
   // FETCH CUSTOM RULES FOR AUTO SYNC
   const [fetchedCustomRules, setFetchedCustomRules] = useState<any>(null);
   const [customRulesLoaded, setCustomRulesLoaded] = useState(false);
+  const [tireBrands, setTireBrands] = useState<string[]>(['Yokohama', 'Hankook', 'Giti']);
   
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'weight_rules'), (docSnap) => {
@@ -275,7 +284,19 @@ export default function InspectionTab() {
       console.error('Failed to fetch custom rules', error);
       setCustomRulesLoaded(true);
     });
-    return () => unsub();
+    
+    const unsubTire = onSnapshot(doc(db, 'settings', 'tire_rules'), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().brands) {
+        setTireBrands(docSnap.data().brands);
+      } else {
+        setTireBrands(['Yokohama', 'Hankook', 'Giti']); // Fallback
+      }
+    });
+    
+    return () => {
+      unsub();
+      unsubTire();
+    };
   }, []);
 
   // AUTO SYNC RULES WHEN SERIES CHANGES
@@ -586,15 +607,13 @@ export default function InspectionTab() {
   }, [search, sortConfig, inspections, activeTab, eventFilter, yearFilter, currentUser?.uid, userRole]);
 
   const getStickerGuideImage = (series: string) => {
-    // Note: To use the original images you uploaded, place them in the /public folder of your repo 
-    // and replace these placehold URLs with references like '/siam_eco_sticker_guide.png'
     const normalized = (series || '').toLowerCase().trim();
-    if (normalized.includes('eco')) return 'https://placehold.co/1200x800/22c55e/ffffff?text=SIAM+ECO+Sticker+Guide';
-    if (normalized.includes('truck')) return 'https://placehold.co/1200x800/eab308/ffffff?text=SIAM+TRUCK+Sticker+Guide';
-    if (normalized.includes('group a')) return 'https://placehold.co/1200x800/ef4444/ffffff?text=SIAM+Group+A+Sticker+Guide';
-    if (normalized.includes('group n')) return 'https://placehold.co/1200x800/3b82f6/ffffff?text=SIAM+Group+N+Sticker+Guide';
-    if (normalized.includes('gtmc')) return 'https://placehold.co/1200x800/a855f7/ffffff?text=SIAM+GTMC+Sticker+Guide';
-    if (normalized.includes('gtrc')) return 'https://placehold.co/1200x800/f97316/ffffff?text=SIAM+GTRC+Sticker+Guide';
+    if (normalized.includes('eco')) return stickerEco;
+    if (normalized.includes('truck')) return stickerTruck;
+    if (normalized.includes('group a')) return stickerGroupA;
+    if (normalized.includes('group n')) return stickerGroupN;
+    if (normalized.includes('gtmc')) return stickerGTMC;
+    if (normalized.includes('gtrc')) return stickerGTRC;
     return 'https://placehold.co/1200x800/64748b/ffffff?text=General+Sticker+Guide';
   };
 
@@ -1361,10 +1380,12 @@ export default function InspectionTab() {
                         <CheckCircle2 className="w-4 h-4 text-slate-400" /> Tire Marking Amount
                       </h3>
                       <div className="flex flex-col justify-center space-y-4 flex-1">
-                        <div className="grid grid-cols-3 gap-3">
-                          {renderInput('Yokohama', 'tireMarkAmount.yokohama', 'number', '0')}
-                          {renderInput('Hankook', 'tireMarkAmount.hankook', 'number', '0')}
-                          {renderInput('Giti', 'tireMarkAmount.giti', 'number', '0')}
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                          {tireBrands.map(brand => (
+                            <div key={brand}>
+                              {renderInput(brand, `tireMarkAmount.${brand.toLowerCase()}` as any, 'number', '0')}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
