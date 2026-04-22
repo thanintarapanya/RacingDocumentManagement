@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Scale, Plus, Trash2, Save, Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Scale, Plus, Trash2, Save, Loader2, X, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 import { db } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
@@ -32,6 +32,7 @@ interface DynamicWeightOption {
 export default function RulesSettings() {
   const [activeRuleTab, setActiveRuleTab] = useState('weighting');
   const [activeSeriesTab, setActiveSeriesTab] = useState(SERIES_CATEGORIES[0]);
+  const [activeYearTab, setActiveYearTab] = useState(new Date().getFullYear().toString());
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -41,7 +42,8 @@ export default function RulesSettings() {
   const [config, setConfig] = useState<any>({
     baseWeightPresets: {},
     weightPresets: {},
-    customTables: {}
+    customTables: {},
+    sponsorStickers: {}
   });
   const [tireBrands, setTireBrands] = useState<string[]>(['Yokohama', 'Hankook', 'Giti']);
 
@@ -417,6 +419,17 @@ export default function RulesSettings() {
         >
           <Plus className="w-4 h-4" />
           Marking Tire
+        </button>
+        <button
+          onClick={() => setActiveRuleTab('sponsor_sticker')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeRuleTab === 'sponsor_sticker'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+          }`}
+        >
+          <Tag className="w-4 h-4" />
+          Sponsor Sticker
         </button>
       </div>
 
@@ -822,6 +835,149 @@ export default function RulesSettings() {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+      {activeRuleTab === 'sponsor_sticker' && (
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-xl font-light text-slate-900">Sponsor Sticker Guides</h3>
+                <p className="text-sm text-slate-500 mt-1">Upload and manage sticker layout guides for each series and year.</p>
+              </div>
+              <button 
+                onClick={saveRules}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Save Changes
+              </button>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-8">
+              <div className="lg:w-48 flex-shrink-0 space-y-6">
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Year</h4>
+                  <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+                    {['2024', '2025', '2026', '2027', '2028'].map(year => (
+                      <button
+                        key={year}
+                        onClick={() => setActiveYearTab(year)}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          activeYearTab === year
+                            ? 'bg-orange-500 text-white shadow-md'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {year}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Series</h4>
+                  <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scrollbar-hide">
+                    {SERIES_CATEGORIES.map(category => (
+                      <button
+                        key={category}
+                        onClick={() => setActiveSeriesTab(category)}
+                        className={`flex-shrink-0 text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          activeSeriesTab === category
+                            ? 'bg-slate-900 text-white shadow-md'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 underline decoration-orange-500/0 hover:decoration-orange-500/50 underline-offset-4'
+                        }`}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-6 border-l border-slate-100 lg:pl-8">
+                <div className="bg-slate-50/50 rounded-2xl p-8 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center group transition-all hover:border-orange-200">
+                  <div className="mb-4">
+                    <div className="w-16 h-16 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Tag className="w-8 h-8 text-orange-500" />
+                    </div>
+                  </div>
+                  <h4 className="font-semibold text-slate-900 mb-2">Guide for {activeSeriesTab} ({activeYearTab})</h4>
+                  <p className="text-sm text-slate-500 max-w-xs mb-6 font-light">Upload the sponsor sticker placement layout. This will be visible to scrutineers during inspection.</p>
+                  
+                  {config.sponsorStickers?.[activeYearTab]?.[activeSeriesTab] ? (
+                    <div className="relative w-full max-w-md aspect-[3/2] rounded-xl overflow-hidden border border-slate-200 shadow-lg group-hover:shadow-xl transition-all mb-4">
+                      <img 
+                        src={config.sponsorStickers[activeYearTab][activeSeriesTab]} 
+                        alt="Sticker Guide Preview" 
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                        <label className="bg-white text-slate-900 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer hover:bg-orange-50 transition-colors">
+                          Replace Image
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const base64 = event.target?.result as string;
+                                  const newConfig = { ...config };
+                                  if (!newConfig.sponsorStickers) newConfig.sponsorStickers = {};
+                                  if (!newConfig.sponsorStickers[activeYearTab]) newConfig.sponsorStickers[activeYearTab] = {};
+                                  newConfig.sponsorStickers[activeYearTab][activeSeriesTab] = base64;
+                                  setConfig(newConfig);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        <button 
+                          onClick={() => {
+                            const newConfig = { ...config };
+                            delete newConfig.sponsorStickers[activeYearTab][activeSeriesTab];
+                            setConfig(newConfig);
+                          }}
+                          className="bg-white text-red-600 px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-50 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="bg-slate-900 text-white px-8 py-3 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition-all shadow-md active:scale-95">
+                      Upload Guide Image
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const base64 = event.target?.result as string;
+                              const newConfig = { ...config };
+                              if (!newConfig.sponsorStickers) newConfig.sponsorStickers = {};
+                              if (!newConfig.sponsorStickers[activeYearTab]) newConfig.sponsorStickers[activeYearTab] = {};
+                              newConfig.sponsorStickers[activeYearTab][activeSeriesTab] = base64;
+                              setConfig(newConfig);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

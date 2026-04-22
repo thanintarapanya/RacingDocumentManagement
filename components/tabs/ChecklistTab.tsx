@@ -275,7 +275,7 @@ export default function ChecklistTab() {
       });
     }
     return filtered;
-  }, [search, sortConfig, entries, activeTab, eventFilter, yearFilter]);
+  }, [search, sortConfig, entries, activeTab, eventFilter, yearFilter, checklists]);
 
   const groupedEntries = useMemo(() => {
     const grouped = SERIES_CATEGORIES.map(category => ({

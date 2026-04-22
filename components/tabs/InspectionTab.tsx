@@ -19,7 +19,12 @@ import {
   Info,
   RefreshCw,
   Plus,
-  Scale
+  Scale,
+  Save,
+  Download,
+  Edit2,
+  ChevronLeft,
+  History
 } from 'lucide-react';
 
 const SERIES_CATEGORIES = [
@@ -32,7 +37,7 @@ const SERIES_CATEGORIES = [
   'ISUZU Challenge Thailand'
 ];
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, where, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, where, getDoc, addDoc, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
 import { useAppStore } from '@/lib/store';
 import { weightPresets, baseWeightPresets } from './weightPresets';
@@ -56,9 +61,21 @@ type Inspection = {
   brand: string;
   carModel: string;
   sealNumber: string;
+  status?: 'Draft' | 'Waiting For Inspection' | 'Inspecting' | 'Pass' | 'Not Pass';
+  notPassReasons?: string;
   formData?: any;
   createdAt: string;
   updatedAt: string;
+};
+
+type InspectionLog = {
+  id: string;
+  changedBy: string;
+  changedByName: string;
+  changedAt: string;
+  previousData: any;
+  newData: any;
+  changes: Record<string, { old: any, new: any }>;
 };
 
 const SortableHeader = ({ 
@@ -172,7 +189,9 @@ const initialFormData = {
     isCustom?: boolean;
   }>,
   customTablesData: [] as any[],
-  customTablesSelections: {} as Record<string, string | string[]>
+  customTablesSelections: {} as Record<string, string | string[]>,
+  status: 'Draft' as 'Draft' | 'Waiting For Inspection' | 'Inspecting' | 'Pass' | 'Not Pass',
+  notPassReasons: ''
 };
 
 export default function InspectionTab() {
@@ -183,11 +202,21 @@ export default function InspectionTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedHistoryCarNumber, setSelectedHistoryCarNumber] = useState<string | null>(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<Inspection | null>(null);
+  const [inspectionHistory, setInspectionHistory] = useState<InspectionLog[]>([]);
+  const [selectedHistoryLog, setSelectedHistoryLog] = useState<InspectionLog | null>(null);
+  const [showHistorySheet, setShowHistorySheet] = useState(false);
+  const [liveFormData, setLiveFormData] = useState<any>(null);
   
+  // Store state
+  const entries = useAppStore(state => state.entries);
+  const userRole = useAppStore(state => state.userRole);
+  const currentUser = auth.currentUser;
+
   // Form Wizard States
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 6;
-  
+  const isCompetitor = userRole === 'competitor' || userRole === 'user';
+  const totalSteps = isCompetitor ? 4 : 6;
+
   // List View States
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>('All');
@@ -197,6 +226,7 @@ export default function InspectionTab() {
   const [recordsPerPage, setRecordsPerPage] = useState(20);
   
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showStickerModal, setShowStickerModal] = useState(false);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -225,24 +255,38 @@ export default function InspectionTab() {
   const [formData, setFormData] = useState(initialFormData);
   const [showValidation, setShowValidation] = useState(false);
 
-  const entries = useAppStore(state => state.entries);
-  const userRole = useAppStore(state => state.userRole);
-  const currentUser = auth.currentUser;
-
   const canEditAll = ['admin', 'president', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'].includes(userRole || '');
   const canEditOwn = userRole === 'competitor' || userRole === 'user';
   const isOwnDoc = editingId ? (inspections.find(i => i.id === editingId)?.userId === currentUser?.uid) : true;
   
   const canEditField = (field: string) => {
+    if (selectedHistoryLog) return false;
     if (field === 'eventYear' || field === 'inspectionDate') return false;
-    if (canEditAll) return true;
-    if (canEditOwn && isOwnDoc) {
-      if (editingId) {
-        const allowedEditFields = ['driverName', 'carNumber', 'series', 'teamName'];
-        return allowedEditFields.includes(field);
-      }
+    
+    const isScrutineerRole = ['admin', 'president', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'].includes(userRole || '');
+    
+    // Status locks competitor edits
+    const status = formData.status || 'Draft';
+    
+    if (isScrutineerRole) {
       return true;
     }
+
+    if (isCompetitor && isOwnDoc) {
+      if (status !== 'Draft') return false; // Competitors cannot edit after submission or during inspection
+      
+      // Competitors only edit Step 1-3 fields
+      const competitorFields = [
+        'series', 'event', 'carNumber', 'stadium', 'grades', 'teamName', 'racerName', 'teamManagerName',
+        'carManufacturer', 'otherCarManufacturer', 'model', 'engineDisplacement', 'engineCode', 'transmission', 'drivetrain', 'gearShiftPattern',
+        'tireMarkAmount', 'stickers', 'baseWeight', 'dynamicWeights', 'customTablesSelections'
+      ];
+      
+      // Handle nested fields like stickers.haveAllStickers
+      const rootField = field.split('.')[0];
+      return competitorFields.includes(rootField) || competitorFields.includes(field);
+    }
+    
     return false;
   };
   
@@ -370,6 +414,35 @@ export default function InspectionTab() {
     }
   }, [formData.series, formData.carNumber, entries]);
 
+  const getChanges = (oldData: any, newData: any) => {
+    const changes: Record<string, { old: any, new: any }> = {};
+    const compare = (oldObj: any, newObj: any, prefix = '') => {
+      if (!oldObj || !newObj) return;
+      const allKeys = Array.from(new Set([...Object.keys(oldObj), ...Object.keys(newObj)]));
+      allKeys.forEach(key => {
+        const fullKey = prefix ? `${prefix}.${key}` : key;
+        const oldVal = oldObj[key];
+        const newVal = newObj[key];
+        if (key === 'updatedAt' || key === 'createdAt' || key === 'id') return;
+        if (typeof newVal === 'object' && newVal !== null && !Array.isArray(newVal)) {
+          if (typeof oldVal !== 'object' || oldVal === null || Array.isArray(oldVal)) {
+            changes[fullKey] = { old: oldVal, new: newVal };
+          } else {
+            compare(oldVal, newVal, fullKey);
+          }
+        } else if (Array.isArray(newVal)) {
+          if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+            changes[fullKey] = { old: oldVal, new: newVal };
+          }
+        } else if (oldVal !== newVal) {
+          changes[fullKey] = { old: oldVal, new: newVal };
+        }
+      });
+    };
+    compare(oldData, newData);
+    return changes;
+  };
+
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, File[]>>({});
 
   const handleFileChange = (label: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -432,7 +505,7 @@ export default function InspectionTab() {
     if (!auth.currentUser) return;
     
     let q;
-    if (userRole === 'competitor') {
+    if (userRole === 'competitor' || userRole === 'user') {
       q = query(collection(db, 'car_inspections'), where('userId', '==', auth.currentUser.uid));
     } else {
       q = query(collection(db, 'car_inspections'));
@@ -481,14 +554,15 @@ export default function InspectionTab() {
     });
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (statusOverride?: 'Draft' | 'Waiting For Inspection' | 'Inspecting' | 'Pass' | 'Not Pass') => {
     if (!auth.currentUser) return;
     setIsSubmitting(true);
     try {
+      const finalStatus = (typeof statusOverride === 'string' ? statusOverride : formData.status) || 'Draft';
       const docId = editingId || Date.now().toString();
       const docRef = doc(db, 'car_inspections', docId);
       
-      const payload = {
+      const payload: any = {
         inspectionDate: formData.inspectionDate,
         racingModel: formData.series,
         carNumber: formData.carNumber,
@@ -497,12 +571,32 @@ export default function InspectionTab() {
         brand: formData.carManufacturer,
         carModel: formData.model,
         sealNumber: formData.engineSealNumber,
-        formData: formData,
+        status: finalStatus,
+        notPassReasons: formData.notPassReasons || '',
+        formData: { ...formData, status: finalStatus },
         updatedAt: new Date().toISOString(),
-        userId: auth.currentUser.uid
+        userId: editingId ? (inspections.find(i => i.id === editingId)?.userId || auth.currentUser.uid) : auth.currentUser.uid
       };
 
-      if (!editingId) {
+      if (editingId) {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const oldData = docSnap.data();
+          const changes = getChanges(oldData, payload);
+          
+          if (Object.keys(changes).length > 0) {
+            const historyRef = collection(db, 'car_inspections', editingId, 'history');
+            await addDoc(historyRef, {
+              changedBy: auth.currentUser.uid,
+              changedByName: auth.currentUser.displayName || auth.currentUser.email || 'Admin',
+              changedAt: new Date().toISOString(),
+              previousData: oldData,
+              newData: payload,
+              changes
+            });
+          }
+        }
+      } else {
         Object.assign(payload, { createdAt: new Date().toISOString() });
       }
 
@@ -520,9 +614,26 @@ export default function InspectionTab() {
     }
   };
 
-  const handleEdit = (inspection: Inspection) => {
+  const fetchHistory = async (inspectionId: string) => {
+    setIsLoading(true);
+    try {
+      const historyRef = collection(db, 'car_inspections', inspectionId, 'history');
+      const q = query(historyRef, orderBy('changedAt', 'desc'));
+      const snapshot = await getDocs(q);
+      const logs: InspectionLog[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InspectionLog));
+      setInspectionHistory(logs);
+      setShowHistorySheet(true);
+    } catch (err) {
+      console.error("Failed to fetch history", err);
+      showToast("Failed to load history");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEdit = async (inspection: Inspection) => {
     setEditingId(inspection.id);
-    setFormData(inspection.formData || {
+    const data = inspection.formData || {
       ...initialFormData,
       inspectionDate: inspection.inspectionDate || initialFormData.inspectionDate,
       series: inspection.racingModel || '',
@@ -531,8 +642,28 @@ export default function InspectionTab() {
       racerName: inspection.racerName || '',
       carManufacturer: inspection.brand || '',
       model: inspection.carModel || '',
-      engineSealNumber: inspection.sealNumber || ''
-    });
+      engineSealNumber: inspection.sealNumber || '',
+      status: inspection.status || 'Draft'
+    };
+    
+    setFormData(data);
+    
+    // Automatic status update if scrutineer opens a "Waiting For Inspection" form
+    const isScrutineerRole = ['admin', 'president', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'].includes(userRole || '');
+    if (isScrutineerRole && inspection.status === 'Waiting For Inspection') {
+      try {
+        const docRef = doc(db, 'car_inspections', inspection.id);
+        await setDoc(docRef, { 
+          status: 'Inspecting', 
+          updatedAt: new Date().toISOString(),
+          formData: { ...data, status: 'Inspecting' }
+        }, { merge: true });
+        setFormData(prev => ({ ...prev, status: 'Inspecting' }));
+      } catch (err) {
+        console.error("Failed to update status to Inspecting", err);
+      }
+    }
+
     setCurrentStep(1);
     setView('form');
   };
@@ -606,7 +737,15 @@ export default function InspectionTab() {
     return filtered;
   }, [search, sortConfig, inspections, activeTab, eventFilter, yearFilter, currentUser?.uid, userRole]);
 
-  const getStickerGuideImage = (series: string) => {
+  const getStickerGuideImage = (series: string, year?: string) => {
+    // Priority 1: From Custom Rules (Sponsor Stickers)
+    if (fetchedCustomRules?.sponsorStickers && year && series) {
+      if (fetchedCustomRules.sponsorStickers[year]?.[series]) {
+        return fetchedCustomRules.sponsorStickers[year][series];
+      }
+    }
+
+    // Priority 2: Fallback to old hardcoded stickers
     const normalized = (series || '').toLowerCase().trim();
     if (normalized.includes('eco')) return stickerEco;
     if (normalized.includes('truck')) return stickerTruck;
@@ -657,6 +796,12 @@ export default function InspectionTab() {
     return false;
   };
 
+  const isFieldChanged = (field: string) => {
+    if (!selectedHistoryLog) return false;
+    // Check if the exact field or formData prefixed field changed
+    return !!(selectedHistoryLog.changes[field] || selectedHistoryLog.changes[`formData.${field}`]);
+  };
+
   const renderSelect = (label: string, field: string, options: string[], className = '') => {
     const keys = field.split('.');
     let value = formData as any;
@@ -664,15 +809,20 @@ export default function InspectionTab() {
       value = value?.[key];
     }
     const invalid = isFieldInvalid(field);
+    const changed = isFieldChanged(field);
     
     return (
       <div className={`space-y-2 ${className}`}>
-        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label} {invalid && <span className="text-red-500">*</span>}</label>
+        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
+          {label} 
+          {invalid && <span className="text-red-500">*</span>}
+          {changed && <span className="ml-2 text-rose-500 text-[9px] font-bold ring-1 ring-rose-500/20 bg-rose-50 px-1 rounded">CHANGED</span>}
+        </label>
         <div className="relative">
           <select 
             value={value || ''}
             onChange={(e) => handleChange(field, e.target.value)}
-            className={`w-full bg-slate-50/50 border ${invalid ? 'border-red-400 ring-2 ring-red-100/50' : 'border-slate-100'} rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed`}
+            className={`w-full bg-slate-50/50 border ${invalid ? 'border-red-400 ring-2 ring-red-100/50' : changed ? 'border-rose-400 ring-2 ring-rose-100/50' : 'border-slate-100'} rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed`}
             disabled={!canEditField(field)}
           >
             <option value="" disabled>Select {label.split('/')[0].trim()}</option>
@@ -691,15 +841,20 @@ export default function InspectionTab() {
       value = value?.[key];
     }
     const invalid = isFieldInvalid(field);
+    const changed = isFieldChanged(field);
     
     return (
       <div className={`space-y-2 ${className}`}>
-        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label} {invalid && <span className="text-red-500">*</span>}</label>
+        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
+          {label} 
+          {invalid && <span className="text-red-500">*</span>}
+          {changed && <span className="ml-2 text-rose-500 text-[9px] font-bold ring-1 ring-rose-500/20 bg-rose-50 px-1 rounded">CHANGED</span>}
+        </label>
         <input 
           type={type} 
           value={value || ''}
           onChange={(e) => handleChange(field, e.target.value)}
-          className={`w-full bg-slate-50/50 border ${invalid ? 'border-red-400 ring-2 ring-red-100/50' : 'border-slate-100'} rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed`}
+          className={`w-full bg-slate-50/50 border ${invalid ? 'border-red-400 ring-2 ring-red-100/50' : changed ? 'border-rose-400 ring-2 ring-rose-100/50' : 'border-slate-100'} rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed`}
           placeholder={placeholder || label}
           disabled={!canEditField(field)}
         />
@@ -714,12 +869,14 @@ export default function InspectionTab() {
       checked = checked?.[key];
     }
     
+    const changed = isFieldChanged(field);
+    
     return (
       <label className={`flex items-center gap-3 cursor-pointer group ${className} ${!canEditField(field) ? 'opacity-60 cursor-not-allowed' : ''}`}>
-        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${checked ? 'bg-orange-500 border-orange-500' : 'border-slate-300 group-hover:border-orange-400 bg-white'}`}>
+        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${checked ? (changed ? 'bg-rose-500 border-rose-500' : 'bg-orange-500 border-orange-500') : (changed ? 'border-rose-400 ring-2 ring-rose-100/50 bg-white' : 'border-slate-300 group-hover:border-orange-400 bg-white')}`}>
           {checked && <Check className="w-3.5 h-3.5 text-white" />}
         </div>
-        <span className="text-sm text-slate-700 font-light select-none">{label}</span>
+        <span className={`text-sm ${changed ? 'text-rose-600 font-medium' : 'text-slate-700 font-light'} select-none`}>{label}</span>
         <input 
           type="checkbox" 
           className="hidden"
@@ -738,6 +895,133 @@ export default function InspectionTab() {
       </div>
     );
   }
+
+  const renderHistorySheet = () => (
+    <AnimatePresence>
+      {showHistorySheet && (
+        <div className="fixed inset-0 z-[60] flex justify-end">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowHistorySheet(false)}
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+          />
+          <motion.div 
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col"
+          >
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-medium text-slate-900">Audit Log</h2>
+                <p className="text-xs text-slate-400 mt-1">History of changes for this inspection</p>
+              </div>
+              <button 
+                onClick={() => setShowHistorySheet(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {inspectionHistory.length === 0 ? (
+                <div className="text-center py-20">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <RefreshCw className="w-8 h-8 text-slate-300 animate-spin-slow" />
+                  </div>
+                  <p className="text-slate-500 font-light">No change history found.</p>
+                </div>
+              ) : (
+                inspectionHistory.map((log) => (
+                  <button
+                    key={log.id}
+                    onClick={() => {
+                      if (!liveFormData) {
+                        setLiveFormData(formData);
+                      }
+                      setSelectedHistoryLog(log);
+                      setFormData(log.newData.formData || log.newData);
+                      setShowHistorySheet(false);
+                      showToast(`Viewing version from ${new Date(log.changedAt).toLocaleString()}`);
+                    }}
+                    className={`w-full text-left p-4 rounded-2xl border transition-all ${
+                      selectedHistoryLog?.id === log.id 
+                        ? 'border-orange-500 bg-orange-50/50 ring-1 ring-orange-500' 
+                        : 'border-slate-100 hover:border-slate-200 bg-white'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                       <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                         {new Date(log.changedAt).toLocaleString()}
+                       </span>
+                       <span className="px-2 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-500 rounded-full uppercase tracking-tighter">
+                         {Object.keys(log.changes || {}).length} Changes
+                       </span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                        {log.changedByName?.charAt(0) || 'U'}
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 font-mono text-[10px] uppercase">{log.changedByName}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {Object.keys(log.changes || {}).slice(0, 3).map(field => (
+                        <div key={field} className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <Edit2 className="w-3 h-3 text-rose-400" />
+                          <span className="truncate">{field.replace('formData.', '')}</span>
+                        </div>
+                      ))}
+                      {Object.keys(log.changes || {}).length > 3 && (
+                        <div className="text-[10px] text-slate-400 italic">
+                          + {Object.keys(log.changes || {}).length - 3} more fields
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+            
+            {selectedHistoryLog && (
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    if (liveFormData) {
+                      setFormData(liveFormData);
+                      setLiveFormData(null);
+                    }
+                    setSelectedHistoryLog(null);
+                  }}
+                  className="w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-100 transition-all flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <X className="w-4 h-4" />
+                  Exit History Mode
+                </button>
+                
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to restore this version? All unsaved current changes will be lost.')) {
+                      setLiveFormData(null);
+                      setSelectedHistoryLog(null);
+                      showToast('Version restored to form. Click Save to apply.');
+                    }
+                  }}
+                  className="w-full py-3 bg-orange-500 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Restore This Version
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
 
   if (view === 'list') {
     return (
@@ -851,8 +1135,7 @@ export default function InspectionTab() {
                   <SortableHeader label="TEAM NAME" sortKey="teamName" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="RACER NAME" sortKey="racerName" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="BRAND" sortKey="brand" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="CAR MODEL" sortKey="carModel" sortConfig={sortConfig} requestSort={requestSort} />
-                  <SortableHeader label="SEAL NUMBER" sortKey="sealNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  <SortableHeader label="STATUS" sortKey="status" sortConfig={sortConfig} requestSort={requestSort} />
                   <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-right">ACTIONS</th>
                 </tr>
               </thead>
@@ -891,10 +1174,15 @@ export default function InspectionTab() {
                         <span className="text-sm text-slate-600 font-light">{item.brand}</span>
                       </td>
                       <td className="px-6 py-5">
-                        <span className="text-sm text-slate-600 font-light">{item.carModel}</span>
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="text-sm text-slate-600 font-light">{item.sealNumber}</span>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          item.status === 'Pass' ? 'bg-emerald-100 text-emerald-600' :
+                          item.status === 'Not Pass' ? 'bg-rose-100 text-rose-600' :
+                          item.status === 'Inspecting' ? 'bg-blue-100 text-blue-600' :
+                          item.status === 'Waiting For Inspection' ? 'bg-orange-100 text-orange-600' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {item.status || 'Draft'}
+                        </span>
                       </td>
                       <td className="px-6 py-5 text-right">
                         <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -956,10 +1244,12 @@ export default function InspectionTab() {
         </div>
       </motion.div>
 
+      {renderHistorySheet()}
       {renderToast()}
     </>
     );
   }
+
 
   if (view === 'history-list') {
     const historyInspections = inspections.filter(i => i.carNumber === selectedHistoryCarNumber);
@@ -1057,13 +1347,39 @@ export default function InspectionTab() {
             </div>
           </div>
         </motion.div>
+        {renderHistorySheet()}
         {renderToast()}
       </>
     );
   }
 
   if (view === 'history-detail' && selectedHistoryItem) {
-    const data = selectedHistoryItem.formData || {};
+    const currentViewData = selectedHistoryLog ? selectedHistoryLog.newData : selectedHistoryItem;
+    const data = currentViewData.formData || {};
+
+    const HighlightField = ({ label, value, fieldPath }: { label: string, value: any, fieldPath: string }) => {
+      const isChanged = selectedHistoryLog?.changes?.[fieldPath] !== undefined;
+      
+      return (
+        <div className={`p-4 rounded-2xl transition-all ${isChanged ? 'bg-rose-50 border border-rose-200 ring-2 ring-rose-100 ring-offset-2' : 'bg-slate-50/50 border border-transparent'}`}>
+          <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 font-bold">{label}</h4>
+          <div className={`text-sm ${isChanged ? 'text-rose-600 font-bold' : 'text-slate-600 font-light'}`}>
+            {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : (value || '-')}
+          </div>
+          {isChanged && (
+            <div className="mt-2 flex items-center gap-2 text-[10px] bg-white/50 p-2 rounded-xl border border-rose-100">
+              <span className="text-slate-400 uppercase font-black text-[8px]">Old Val</span>
+              <span className="text-slate-500 line-through font-medium">
+                {typeof selectedHistoryLog?.changes?.[fieldPath]?.old === 'boolean' 
+                  ? (selectedHistoryLog?.changes?.[fieldPath]?.old ? 'Yes' : 'No') 
+                  : (String(selectedHistoryLog?.changes?.[fieldPath]?.old) || 'None')}
+              </span>
+            </div>
+          )}
+        </div>
+      );
+    };
+
     return (
       <>
         <motion.div 
@@ -1074,93 +1390,91 @@ export default function InspectionTab() {
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
           className="max-w-4xl mx-auto pb-12"
         >
-          <div className="mb-10 flex items-center gap-6">
-            <button 
-              onClick={() => setView('history-list')}
-              className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2">
-                Inspection Details
-              </h1>
-              <p className="text-slate-500 font-light text-sm">View detailed inspection information.</p>
+          <div className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={() => setView('history-list')}
+                className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2">
+                  Inspection Details
+                </h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-slate-500 font-light text-sm">View detailed inspection information.</p>
+                  <span className="text-slate-300">•</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                    selectedHistoryItem?.status === 'Pass' ? 'text-emerald-500' :
+                    selectedHistoryItem?.status === 'Not Pass' ? 'text-rose-500' :
+                    selectedHistoryItem?.status === 'Inspecting' ? 'text-blue-500' :
+                    selectedHistoryItem?.status === 'Waiting For Inspection' ? 'text-orange-500' :
+                    'text-slate-400'
+                  }`}>
+                    {selectedHistoryItem?.status || 'Draft'}
+                  </span>
+                </div>
+              </div>
             </div>
+            
+            <button
+              onClick={() => fetchHistory(selectedHistoryItem.id)}
+              className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm active:scale-95"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Audit Log History
+            </button>
           </div>
 
           <div className="space-y-8">
-            {/* Driver Info */}
+            {/* Decision Info */}
+            {(selectedHistoryItem.status === 'Pass' || selectedHistoryItem.status === 'Not Pass') && (
+              <div className={`rounded-3xl border p-8 ${selectedHistoryItem.status === 'Pass' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                <h3 className={`text-xs font-semibold uppercase tracking-widest mb-6 border-b pb-4 ${selectedHistoryItem.status === 'Pass' ? 'text-emerald-600 border-emerald-100' : 'text-rose-600 border-rose-100'}`}>
+                  Inspection Decision
+                </h3>
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedHistoryItem.status === 'Pass' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                    {selectedHistoryItem.status === 'Pass' ? <CheckCircle2 className="w-6 h-6" /> : <X className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <div className={`text-lg font-bold ${selectedHistoryItem.status === 'Pass' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {selectedHistoryItem.status}
+                    </div>
+                    {selectedHistoryItem.status === 'Not Pass' && selectedHistoryItem.notPassReasons && (
+                      <p className="text-sm text-rose-600 mt-1 font-light">{selectedHistoryItem.notPassReasons}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4">Driver & Series Info</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Inspection Date</h4>
-                  <div className="text-sm font-light text-slate-600">{data.inspectionDate || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Stadium</h4>
-                  <div className="text-sm font-light text-slate-600">{data.stadium || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Series</h4>
-                  <div className="text-sm font-light text-slate-600">{data.series || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Grades</h4>
-                  <div className="text-sm font-light text-slate-600">{data.grades || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Car Number</h4>
-                  <div className="text-sm font-light text-slate-600">{data.carNumber || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Team Name</h4>
-                  <div className="text-sm font-light text-slate-600">{data.teamName || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Racer Name</h4>
-                  <div className="text-sm font-light text-slate-600">{data.racerName || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Team Manager Name</h4>
-                  <div className="text-sm font-light text-slate-600">{data.teamManagerName || '-'}</div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <HighlightField label="Inspection Date" value={data.inspectionDate} fieldPath="formData.inspectionDate" />
+                <HighlightField label="Stadium" value={data.stadium} fieldPath="formData.stadium" />
+                <HighlightField label="Series" value={data.series} fieldPath="formData.series" />
+                <HighlightField label="Grades" value={data.grades} fieldPath="formData.grades" />
+                <HighlightField label="Car Number" value={data.carNumber} fieldPath="formData.carNumber" />
+                <HighlightField label="Team Name" value={data.teamName} fieldPath="formData.teamName" />
+                <HighlightField label="Racer Name" value={data.racerName} fieldPath="formData.racerName" />
+                <HighlightField label="Team Manager Name" value={data.teamManagerName} fieldPath="formData.teamManagerName" />
               </div>
             </div>
 
             {/* Car Info */}
             <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4">Car Info</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Car Manufacturer</h4>
-                  <div className="text-sm font-light text-slate-600">{data.carManufacturer || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Model</h4>
-                  <div className="text-sm font-light text-slate-600">{data.model || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Engine Displacement (CC)</h4>
-                  <div className="text-sm font-light text-slate-600">{data.engineDisplacement || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Engine Code</h4>
-                  <div className="text-sm font-light text-slate-600">{data.engineCode || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Transmission</h4>
-                  <div className="text-sm font-light text-slate-600">{data.transmission || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Drivetrain</h4>
-                  <div className="text-sm font-light text-slate-600">{data.drivetrain || '-'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Gear Shift Pattern</h4>
-                  <div className="text-sm font-light text-slate-600">{data.gearShiftPattern || '-'}</div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <HighlightField label="Car Manufacturer" value={data.carManufacturer} fieldPath="formData.carManufacturer" />
+                <HighlightField label="Model" value={data.model} fieldPath="formData.model" />
+                <HighlightField label="Engine Displacement (CC)" value={data.engineDisplacement} fieldPath="formData.engineDisplacement" />
+                <HighlightField label="Engine Code" value={data.engineCode} fieldPath="formData.engineCode" />
+                <HighlightField label="Transmission" value={data.transmission} fieldPath="formData.transmission" />
+                <HighlightField label="Drivetrain" value={data.drivetrain} fieldPath="formData.drivetrain" />
+                <HighlightField label="Gear Shift Pattern" value={data.gearShiftPattern} fieldPath="formData.gearShiftPattern" />
               </div>
             </div>
 
@@ -1169,15 +1483,9 @@ export default function InspectionTab() {
               <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4 flex items-center gap-2">
                 <Tag className="w-4 h-4" /> Sponsors Sticker Requirements
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Have All Sticker/มีสติกเกอร์ครบแล้ว</h4>
-                  <div className="text-sm font-light text-slate-600">{data.stickers?.haveAllStickers ? 'Yes' : 'No'}</div>
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Still Need Sticker/ต้องการสติกเกอร์</h4>
-                  <div className="text-sm font-light text-slate-600">{data.stickers?.stillNeedSticker ? 'Yes' : 'No'}</div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <HighlightField label="Have All Sticker/มีสติกเกอร์ครบแล้ว" value={data.stickers?.haveAllStickers} fieldPath="formData.stickers.haveAllStickers" />
+                <HighlightField label="Still Need Sticker/ต้องการสติกเกอร์" value={data.stickers?.stillNeedSticker} fieldPath="formData.stickers.stillNeedSticker" />
               </div>
             </div>
 
@@ -1206,6 +1514,7 @@ export default function InspectionTab() {
 
           </div>
         </motion.div>
+        {renderHistorySheet()}
         {renderToast()}
       </>
     );
@@ -1236,20 +1545,58 @@ export default function InspectionTab() {
               <p className="text-slate-500 font-light text-sm">Fill in the car inspection details.</p>
             </div>
           </div>
+          {editingId && (
+            <button
+              onClick={() => fetchHistory(editingId)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-full text-xs font-bold hover:bg-slate-50 hover:text-orange-500 transition-all uppercase tracking-widest shadow-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Audit Log
+            </button>
+          )}
         </div>
 
         <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8 md:p-12">
+          {selectedHistoryLog && (
+            <div className="mb-8 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+                  <History className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-rose-700 uppercase tracking-widest">History View Mode</p>
+                  <p className="text-[10px] text-rose-500">Viewing version from {new Date(selectedHistoryLog.changedAt).toLocaleString()} by {selectedHistoryLog.changedByName}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  if (liveFormData) {
+                    setFormData(liveFormData);
+                    setLiveFormData(null);
+                  }
+                  setSelectedHistoryLog(null);
+                }}
+                className="px-4 py-2 bg-white border border-rose-200 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-50 transition-colors shadow-sm"
+              >
+                Back to Live Edit
+              </button>
+            </div>
+          )}
           {/* Stepper */}
           {currentStep > 0 && (
             <div className="mb-12">
               <div className="flex items-center justify-between mb-4 relative">
-                {[1, 2, 3, 4, 5, 6].map((step) => (
+                {(isCompetitor ? [1, 2, 3, 4] : [1, 2, 3, 4, 5, 6]).map((step) => (
                   <div key={step} className="flex flex-col items-center gap-2 relative z-10">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${currentStep >= step ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 text-slate-400'}`}>
                       {currentStep > step ? <CheckCircle2 className="w-5 h-5" /> : step}
                     </div>
                     <span className={`text-[10px] uppercase tracking-wider font-medium absolute -bottom-6 whitespace-nowrap ${currentStep >= step ? 'text-orange-600' : 'text-slate-400'}`}>
-                      {step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Weight' : step === 4 ? 'Safety' : step === 5 ? 'Seal' : 'Final Check'}
+                      {isCompetitor ? (
+                        step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Weight' : 'Preview'
+                      ) : (
+                        step === 1 ? 'Driver' : step === 2 ? 'Car' : step === 3 ? 'Weight' : step === 4 ? 'Safety' : step === 5 ? 'Seal' : 'Review'
+                      )}
                     </span>
                   </div>
                 ))}
@@ -1317,6 +1664,11 @@ export default function InspectionTab() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="space-y-8"
                 >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-px flex-1 bg-slate-100"></div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Competitor Entries / ข้อมูลจากผู้สมัคร</span>
+                    <div className="h-px flex-1 bg-slate-100"></div>
+                  </div>
                   {/* Auto-fill Identifiers */}
                   <div>
                     <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Auto-fill Identifiers</h3>
@@ -1357,6 +1709,11 @@ export default function InspectionTab() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="space-y-6"
                 >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-px flex-1 bg-slate-100"></div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Competitor Entries / ข้อมูลจากผู้สมัคร</span>
+                    <div className="h-px flex-1 bg-slate-100"></div>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Vehicle Identity */}
                     <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col">
@@ -1410,39 +1767,105 @@ export default function InspectionTab() {
                   </div>
 
                   {/* Sponsors Sticker Check */}
-                  <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 relative w-full">
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-sm font-medium text-slate-900 flex items-center gap-2">
-                        <Tag className="w-4 h-4 text-slate-400" /> Sponsors Sticker Requirements
-                      </h3>
-                      <div className="relative group flex items-center gap-2 text-sm text-orange-600 font-medium cursor-help">
-                        {formData.series ? `${formData.series} Sticker Guide` : 'Sticker Guide'}
-                        <Info className="w-4 h-4" />
-                        
-                        {/* Hover Image Tooltip */}
-                        <div className="absolute right-0 bottom-8 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] w-[350px] sm:w-[500px] pointer-events-none bg-white p-2 rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-200 origin-bottom-right scale-95 group-hover:scale-100">
-                           <div className="relative w-full aspect-[4/3] bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center">
-                             {formData.series ? (
-                               <img 
-                                 src={getStickerGuideImage(formData.series)} 
-                                 alt={`${formData.series} Sticker Chart`}
-                                 className="w-full h-full object-cover"
-                               />
-                             ) : (
-                               <div className="text-slate-400 text-sm flex flex-col items-center gap-2">
-                                 <Car className="w-8 h-8 opacity-50" />
-                                 Please select a Series in Step 1
-                               </div>
-                             )}
-                           </div>
+                  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm relative w-full overflow-hidden">
+                    <div className="absolute top-0 left-0 w-2 h-full bg-slate-900"></div>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100">
+                          <Tag className="w-5 h-5 text-slate-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Sponsors Sticker</h3>
+                          <p className="text-[11px] text-slate-400 font-medium">Verify required stickers are placed correctly</p>
                         </div>
                       </div>
+                      
+                      <button 
+                        type="button"
+                        onClick={() => setShowStickerModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 rounded-xl text-xs font-bold hover:bg-orange-100 border border-orange-200 transition-all hover:scale-105 active:scale-95 shadow-sm uppercase tracking-wider"
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        View Guide
+                      </button>
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100/50">
                       {renderCheckbox('Have All Sticker/มีสติกเกอร์ครบแล้ว', 'stickers.haveAllStickers')}
                       {renderCheckbox('Still Need Sticker/ต้องการสติกเกอร์', 'stickers.stillNeedSticker')}
                     </div>
+
+                    {/* Sticker Modal UI */}
+                    <AnimatePresence>
+                      {showStickerModal && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-10 pointer-events-auto"
+                        >
+                          <div 
+                            className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm cursor-pointer"
+                            onClick={() => setShowStickerModal(false)}
+                          />
+                          <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="relative bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-full overflow-hidden border border-slate-200 flex flex-col"
+                          >
+                            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-white border border-slate-100">
+                                  <Tag className="w-5 h-5 text-orange-500" />
+                                </div>
+                                <div>
+                                  <h3 className="font-bold text-slate-800 tracking-tight">
+                                    {formData.series || 'Series'} Sticker Placement Guide
+                                  </h3>
+                                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mt-1">
+                                    Race Year: {formData.eventYear || 'Current'}
+                                  </p>
+                                </div>
+                              </div>
+                              <button 
+                                onClick={() => setShowStickerModal(false)}
+                                className="p-2 bg-white rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 border border-slate-100 transition-all shadow-sm"
+                              >
+                                <X className="w-5 h-5" />
+                              </button>
+                            </div>
+
+                            <div className="flex-1 overflow-auto bg-slate-100 p-4 md:p-8 flex items-center justify-center min-h-[400px]">
+                              {formData.series ? (
+                                <img 
+                                  src={getStickerGuideImage(formData.series, formData.eventYear)} 
+                                  alt={`${formData.series} Sticker Guide`}
+                                  className="max-w-full max-h-full object-contain rounded-xl shadow-lg border border-white/50"
+                                />
+                              ) : (
+                                <div className="text-center py-20">
+                                  <div className="w-20 h-20 bg-white rounded-3xl shadow-sm border border-slate-200 flex items-center justify-center mx-auto mb-6">
+                                    <Car className="w-10 h-10 text-slate-300" />
+                                  </div>
+                                  <h4 className="text-lg font-medium text-slate-700 mb-2">Series Not Selected</h4>
+                                  <p className="text-sm text-slate-400 max-w-xs mx-auto">Please select a series in Step 1 to load the specific sticker guide.</p>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50/50">
+                              <button 
+                                onClick={() => setShowStickerModal(false)}
+                                className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-md active:scale-95"
+                              >
+                                Close Bridge
+                              </button>
+                            </div>
+                          </motion.div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </motion.div>
               )}
@@ -1456,6 +1879,11 @@ export default function InspectionTab() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="space-y-8"
                 >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-px flex-1 bg-slate-100"></div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Competitor Entries / ข้อมูลจากผู้สมัคร</span>
+                    <div className="h-px flex-1 bg-slate-100"></div>
+                  </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 border-b border-slate-100 pb-4">
                     <div>
                       <h3 className="text-2xl font-light text-slate-900 tracking-tight">Calculated Weight & BOP</h3>
@@ -1700,7 +2128,7 @@ export default function InspectionTab() {
                 </motion.div>
               )}
 
-              {currentStep === 4 && (
+              {currentStep === 4 && !isCompetitor && (
                 <motion.div
                   key="step3"
                   initial={{ opacity: 0, x: 20 }}
@@ -1709,6 +2137,11 @@ export default function InspectionTab() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="space-y-8"
                 >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-px flex-1 bg-rose-100"></div>
+                    <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Official Use Only / สำหรับเจ้าหน้าที่ตรวจสภาพ</span>
+                    <div className="h-px flex-1 bg-rose-100"></div>
+                  </div>
                   <div>
                     <h3 className="text-sm font-medium text-slate-900 mb-4">Car Light / ระบบไฟรถยนต์</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1869,7 +2302,7 @@ export default function InspectionTab() {
                 </motion.div>
               )}
 
-              {currentStep === 6 && (
+              {(currentStep === 6 || (isCompetitor && currentStep === 4)) && (
                 <motion.div
                   key="step5"
                   initial={{ opacity: 0, x: 20 }}
@@ -1879,8 +2312,59 @@ export default function InspectionTab() {
                   className="space-y-8"
                 >
                   <div>
-                    <h3 className="text-lg font-medium text-slate-900 mb-6">Final Check</h3>
+                    <h3 className="text-lg font-medium text-slate-900 mb-6">{isCompetitor ? 'Review Your Information' : 'Final Check & Decision'}</h3>
                     <div className="space-y-6">
+                      {/* Show decision buttons if official */}
+                      {!isCompetitor && (
+                        <div className="bg-orange-50 border border-orange-100 p-8 rounded-3xl mb-8">
+                          <h4 className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-6 text-center">Inspection Decision</h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            <button
+                              onClick={() => handleChange('status', 'Pass')}
+                              className={`flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all ${
+                                formData.status === 'Pass' 
+                                  ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                                  : 'bg-white border-slate-200 text-slate-400 hover:border-emerald-200 hover:bg-emerald-50'
+                              }`}
+                            >
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${formData.status === 'Pass' ? 'bg-white/20' : 'bg-slate-50 text-slate-300'}`}>
+                                <CheckCircle2 className="w-6 h-6" />
+                              </div>
+                              <span className="font-bold text-sm">Pass</span>
+                            </button>
+                            <button
+                              onClick={() => handleChange('status', 'Not Pass')}
+                              className={`flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all ${
+                                formData.status === 'Not Pass' 
+                                  ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/30' 
+                                  : 'bg-white border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50'
+                              }`}
+                            >
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${formData.status === 'Not Pass' ? 'bg-white/20' : 'bg-slate-50 text-slate-300'}`}>
+                                <X className="w-6 h-6" />
+                              </div>
+                              <span className="font-bold text-sm">Not Pass</span>
+                            </button>
+                          </div>
+                          
+                          {formData.status === 'Not Pass' && (
+                            <motion.div 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              className="mt-6 space-y-2"
+                            >
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reasons for not passing</label>
+                              <textarea 
+                                value={formData.notPassReasons || ''}
+                                onChange={(e) => handleChange('notPassReasons', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-light text-slate-900 focus:outline-none focus:ring-4 focus:ring-rose-100 focus:border-rose-300 transition-all min-h-[100px]"
+                                placeholder="E.g. Safety harness expired, Seal missing..."
+                              />
+                            </motion.div>
+                          )}
+                        </div>
+                      )}
+
                       <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                         <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Driver & Series Info</h4>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
@@ -1929,22 +2413,35 @@ export default function InspectionTab() {
             </AnimatePresence>
           </div>
 
-          <div className="mt-12 flex justify-between pt-6 border-t border-slate-100">
-            {currentStep > 1 ? (
-              <button 
-                onClick={() => setCurrentStep(prev => prev - 1)}
-                className="px-8 py-3 rounded-full text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
-              >
-                Back
-              </button>
-            ) : (
-              <button 
-                onClick={() => setView('list')}
-                className="px-8 py-3 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-            )}
+          <div className="mt-12 flex flex-col sm:flex-row justify-between pt-6 border-t border-slate-100 gap-4">
+            <div className="flex gap-3">
+              {currentStep > 1 ? (
+                <button 
+                  onClick={() => setCurrentStep(prev => prev - 1)}
+                  className="px-8 py-3 rounded-full text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
+                >
+                  Back
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setView('list')}
+                  className="px-8 py-3 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+              
+              {isCompetitor && currentStep < 4 && (
+                <button 
+                  onClick={() => handleSubmit('Draft')}
+                  disabled={isSubmitting}
+                  className="px-8 py-3 rounded-full text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save Draft
+                </button>
+              )}
+            </div>
             
             {currentStep < totalSteps ? (
               <button 
@@ -1955,18 +2452,18 @@ export default function InspectionTab() {
               </button>
             ) : (
               <button 
-                onClick={handleSubmit}
-                disabled={isSubmitting || !canEdit}
+                onClick={() => handleSubmit(isCompetitor ? 'Waiting For Inspection' : (formData.status || 'Draft'))}
+                disabled={isSubmitting || (isCompetitor && formData.status !== 'Draft' && !editingId)}
                 className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-orange-500/20 flex items-center gap-2 disabled:opacity-70"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {editingId ? 'Update Inspection' : 'Submit Inspection'}
+                {isCompetitor ? 'Submit for Inspection' : (editingId ? 'Update Inspection' : 'Submit Inspection')}
               </button>
             )}
           </div>
         </div>
       </motion.div>
-
+      {renderHistorySheet()}
       {renderToast()}
     </>
   );

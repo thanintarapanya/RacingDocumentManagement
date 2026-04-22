@@ -37,7 +37,7 @@ export default function DashboardTab() {
     let requestsQuery;
     let inspectionsQuery;
 
-    if (userRole === 'competitor') {
+    if (userRole === 'competitor' || userRole === 'user') {
       requestsQuery = query(collection(db, 'requests'), where('userId', '==', auth.currentUser.uid));
       inspectionsQuery = query(collection(db, 'car_inspections'), where('userId', '==', auth.currentUser.uid));
     } else {

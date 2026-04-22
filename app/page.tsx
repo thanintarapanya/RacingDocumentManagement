@@ -71,6 +71,7 @@ export default function Home() {
       case 'steward':
         return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request', 'settings'].includes(t.id));
       case 'competitor':
+      case 'user':
         return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'request', 'settings'].includes(t.id));
       default:
         return TABS.filter(t => ['dashboard', 'settings'].includes(t.id));

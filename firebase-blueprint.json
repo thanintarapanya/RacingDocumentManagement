@@ -96,12 +96,30 @@
     },
     "Settings": {
       "title": "Settings",
-      "description": "Application settings",
+      "description": "Application settings including rules, tire brands, and sticker guides",
       "type": "object",
       "properties": {
-        "topics": { "type": "array" }
+        "topics": { "type": "array" },
+        "baseWeightPresets": { "type": "object" },
+        "weightPresets": { "type": "object" },
+        "customTables": { "type": "object" },
+        "sponsorStickers": { "type": "object", "description": "Map of year -> series -> Base64 sticker guide image" }
       },
       "required": ["topics"]
+    },
+    "InspectionHistory": {
+      "title": "InspectionHistory",
+      "description": "Log of changes to a car inspection form",
+      "type": "object",
+      "properties": {
+        "changedBy": { "type": "string" },
+        "changedByName": { "type": "string" },
+        "changedAt": { "type": "timestamp" },
+        "previousData": { "type": "object" },
+        "newData": { "type": "object" },
+        "changes": { "type": "object", "description": "Specific fields that changed with old/new values" }
+      },
+      "required": ["changedBy", "changedAt", "newData"]
     },
     "CarInspection": {
       "title": "CarInspection",
@@ -116,6 +134,8 @@
         "brand": { "type": "string" },
         "carModel": { "type": "string" },
         "sealNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["Draft", "Waiting For Inspection", "Inspecting", "Pass", "Not Pass"] },
+        "notPassReasons": { "type": "string" },
         "formData": { "type": "object" },
         "userId": { "type": "string" },
         "createdAt": { "type": "timestamp" },
@@ -210,6 +230,10 @@
     "/car_inspections/{inspectionId}": {
       "schema": { "$ref": "#/entities/CarInspection" },
       "description": "Collection of car inspections"
+    },
+    "/car_inspections/{inspectionId}/history/{historyId}": {
+      "schema": { "$ref": "#/entities/InspectionHistory" },
+      "description": "Changelog for a specific car inspection"
     },
     "/inspections/{inspectionId}": {
       "schema": { "$ref": "#/entities/Inspection" },

@@ -102,7 +102,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     let entriesQuery;
     let deletedItemsQuery;
     
-    if (userRole === 'competitor') {
+    if (userRole === 'competitor' || userRole === 'user') {
       entriesQuery = query(collection(db, 'entries'), where('userId', '==', auth.currentUser.uid));
       deletedItemsQuery = query(collection(db, 'deletedItems'), where('userId', '==', auth.currentUser.uid));
     } else {

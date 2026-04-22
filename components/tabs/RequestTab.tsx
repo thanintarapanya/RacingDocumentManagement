@@ -213,7 +213,7 @@ export default function RequestTab() {
     if (!auth.currentUser) return;
 
     let q;
-    if (userRole === 'competitor') {
+    if (userRole === 'competitor' || userRole === 'user') {
       q = query(collection(db, 'requests'), where('userId', '==', auth.currentUser.uid));
     } else {
       q = query(collection(db, 'requests'));
