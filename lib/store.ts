@@ -54,7 +54,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!user) return;
     
     const state = get();
-    const newId = state.entries.length > 0 ? Math.max(...state.entries.map(e => e.id)) + 1 : 1;
+    const newId = Date.now();
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
     
     const newEntry: Entry = {
