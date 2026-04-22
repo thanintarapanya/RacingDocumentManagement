@@ -280,7 +280,7 @@ export default function EntryFormTab() {
         gradeRace: formData.grade || '-',
         carNumber: formData.carNumber || '-',
         formData: updatedFormData,
-        status: isDraftValue ? 'Draft' : 'Submitted' as const
+        status: (isDraftValue ? 'Draft' : 'Submitted') as 'Draft' | 'Submitted'
       };
 
       if (editingId) {
