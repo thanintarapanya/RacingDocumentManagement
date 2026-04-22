@@ -77,9 +77,26 @@
       "properties": {
         "email": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "president", "secretary", "head_scrutineer", "scrutineer_staff", "steward", "competitor"] },
+        "emailNotificationsEnabled": { "type": "boolean" },
         "createdAt": { "type": "timestamp" }
       },
       "required": ["email", "role", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "targetRole": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "link": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["title", "message", "read", "createdAt"]
     },
     "Checklist": {
       "title": "Checklist",
@@ -112,6 +129,7 @@
       "description": "Log of changes to a car inspection form",
       "type": "object",
       "properties": {
+        "userId": { "type": "string", "description": "The owner of the inspection (for security)" },
         "changedBy": { "type": "string" },
         "changedByName": { "type": "string" },
         "changedAt": { "type": "timestamp" },
@@ -250,6 +268,10 @@
     "/settings/{settingId}": {
       "schema": { "$ref": "#/entities/Settings" },
       "description": "Collection of application settings"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Collection of user notifications"
     }
   }
 }

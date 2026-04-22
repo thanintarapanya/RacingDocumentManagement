@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { motion } from 'motion/react';
 import { Scale, Plus, Trash2, Save, Loader2, X, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 import { db } from '@/firebase';
@@ -909,12 +910,14 @@ export default function RulesSettings() {
                   
                   {config.sponsorStickers?.[activeYearTab]?.[activeSeriesTab] ? (
                     <div className="relative w-full max-w-md aspect-[3/2] rounded-xl overflow-hidden border border-slate-200 shadow-lg group-hover:shadow-xl transition-all mb-4">
-                      <img 
+                      <Image 
                         src={config.sponsorStickers[activeYearTab][activeSeriesTab]} 
                         alt="Sticker Guide Preview" 
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
+                        unoptimized
                       />
-                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-10">
                         <label className="bg-white text-slate-900 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer hover:bg-orange-50 transition-colors">
                           Replace Image
                           <input 

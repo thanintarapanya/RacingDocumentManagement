@@ -29,6 +29,7 @@ const SERIES_CATEGORIES = [
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, doc, setDoc, query, arrayUnion } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
+import { createNotification } from '@/lib/notifications';
 
 const SortableHeader = ({ 
   label, 
@@ -178,6 +179,14 @@ export default function ChecklistTab() {
         updatedAt: timestamp,
         userId: currentUser?.uid
       }, { merge: true });
+
+      createNotification({
+        targetRole: 'admin',
+        title: 'Checklist Updated',
+        message: `${userName} updated the checklist for entry #${id} (${topic}: ${newValue ? 'Passed' : 'Revoked'}).`,
+        type: 'checklist_update',
+        link: 'checklist',
+      });
       
       showToast(`Marked as ${newValue ? 'Checked' : 'Not Checked'}`);
     } catch (error) {

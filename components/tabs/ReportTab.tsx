@@ -29,6 +29,7 @@ const SERIES_CATEGORIES = [
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
+import { createNotification } from '@/lib/notifications';
 import { useAppStore } from '@/lib/store';
 
 interface PassedCar {
@@ -296,6 +297,14 @@ export default function ReportTab() {
       }
 
       await setDoc(doc(db, 'reports', reportId), reportData, { merge: true });
+
+      createNotification({
+        targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward', 'competitor'],
+        title: editingId ? 'Report Updated' : 'New Report',
+        message: `${auth.currentUser.displayName || auth.currentUser.email} ${editingId ? 'updated' : 'created'} a Scrutineering Report for ${formData.series || 'a series'}.`,
+        type: 'report_update',
+        link: 'report',
+      });
       
       showToast(editingId ? 'Report updated successfully' : 'Report created successfully');
       setView('list');

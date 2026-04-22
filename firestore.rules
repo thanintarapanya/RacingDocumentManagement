@@ -17,12 +17,16 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
+    function isParentDocOwner(inspectionId) {
+      return isAuthenticated() && get(/databases/$(database)/documents/car_inspections/$(inspectionId)).data.userId == request.auth.uid;
+    }
+
     function getUserRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && request.auth.token.email == "info@embeddedlinuxgroup.com" && request.auth.token.email_verified == true;
+      return isAuthenticated() && request.auth.token.email == "info@embeddedlinuxgroup.com";
     }
 
     function hasRole(roles) {
@@ -167,6 +171,23 @@ service cloud.firestore {
       return isOldRequestFormat(data) || isNewRequestFormat(data);
     }
 
+    function isValidInspectionHistory(data) {
+      return hasRequiredFields(['userId', 'changedBy', 'changedAt', 'newData']) &&
+             data.userId is string &&
+             data.changedBy is string && data.changedAt is string &&
+             data.newData is map;
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['title', 'message', 'read', 'createdAt']) &&
+             data.title is string && data.message is string &&
+             data.read is bool && data.createdAt is string &&
+             (!('userId' in data) || data.userId is string) &&
+             (!('targetRole' in data) || data.targetRole is string) &&
+             (!('type' in data) || data.type is string) &&
+             (!('link' in data) || data.link is string);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -218,6 +239,11 @@ service cloud.firestore {
       allow create: if hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'competitor']) && isValidCarInspection(request.resource.data) && uidUnchanged();
       allow update: if (hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer']) || (isDocOwner() && hasRole(['competitor']))) && isValidCarInspection(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if hasRole(['admin', 'head_scrutineer']);
+
+      match /history/{historyId} {
+        allow read: if isParentDocOwner(inspectionId) || hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']);
+        allow create: if (hasRole(['admin', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer']) || (isParentDocOwner(inspectionId) && hasRole(['competitor']))) && isValidInspectionHistory(request.resource.data);
+      }
     }
 
     match /inspections/{inspectionId} {
@@ -239,6 +265,13 @@ service cloud.firestore {
       allow create: if hasRole(['admin', 'secretary', 'competitor']) && isValidRequest(request.resource.data) && uidUnchanged();
       allow update: if (hasRole(['admin', 'secretary', 'president', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']) || (isDocOwner() && hasRole(['competitor']))) && isValidRequest(request.resource.data) && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if hasRole(['admin', 'secretary']) || (isDocOwner() && hasRole(['competitor']));
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidNotification(request.resource.data);
+      allow update: if isAuthenticated() && isValidNotification(request.resource.data);
+      allow delete: if isAuthenticated() && (isOwner(resource.data.userId) || hasRole(['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward']));
     }
   }
 }

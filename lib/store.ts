@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { db, auth } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from './firebase-utils';
+import { createNotification } from './notifications';
 
 export type Entry = {
   id: number;
@@ -72,6 +73,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         updatedAt: new Date().toISOString(),
         formData: JSON.stringify(entryData.formData || {})
       });
+      createNotification({
+        targetRole: 'admin',
+        title: 'New Entry Form',
+        message: `${user.displayName || user.email} submitted a new entry form for ${entryData.nameEn}.`,
+        type: 'new_entry',
+        link: 'entry-form',
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'entries');
     }
@@ -94,6 +102,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         updatePayload.formData = JSON.stringify(updatedData.formData);
       }
       await updateDoc(docRef, updatePayload);
+      createNotification({
+        targetRole: 'admin',
+        title: 'Entry Form Updated',
+        message: `An entry form was updated.`,
+        type: 'update_entry',
+        link: 'entry-form',
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'entries');
     }

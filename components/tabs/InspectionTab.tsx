@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -24,7 +25,10 @@ import {
   Download,
   Edit2,
   ChevronLeft,
-  History
+  History,
+  Trash2,
+  Zap,
+  Table
 } from 'lucide-react';
 
 const SERIES_CATEGORIES = [
@@ -39,6 +43,7 @@ const SERIES_CATEGORIES = [
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, where, getDoc, addDoc, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
+import { createNotification } from '@/lib/notifications';
 import { useAppStore } from '@/lib/store';
 import { weightPresets, baseWeightPresets } from './weightPresets';
 
@@ -587,6 +592,7 @@ export default function InspectionTab() {
           if (Object.keys(changes).length > 0) {
             const historyRef = collection(db, 'car_inspections', editingId, 'history');
             await addDoc(historyRef, {
+              userId: oldData.userId,
               changedBy: auth.currentUser.uid,
               changedByName: auth.currentUser.displayName || auth.currentUser.email || 'Admin',
               changedAt: new Date().toISOString(),
@@ -601,6 +607,14 @@ export default function InspectionTab() {
       }
 
       await setDoc(docRef, payload, { merge: true });
+      
+      createNotification({
+        targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward', 'competitor'],
+        title: editingId ? 'Inspection Updated' : 'New Inspection',
+        message: `${auth.currentUser.displayName || auth.currentUser.email} ${editingId ? 'updated' : 'started'} an inspection for car number ${formData.carNumber || '-'}.`,
+        type: 'inspection_update',
+        link: 'inspection',
+      });
       
       showToast(editingId ? 'Inspection updated successfully' : 'Inspection created successfully');
       setView('list');
@@ -948,37 +962,48 @@ export default function InspectionTab() {
                       setShowHistorySheet(false);
                       showToast(`Viewing version from ${new Date(log.changedAt).toLocaleString()}`);
                     }}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all ${
+                    className={`w-full text-left p-5 rounded-3xl border transition-all duration-300 ${
                       selectedHistoryLog?.id === log.id 
-                        ? 'border-orange-500 bg-orange-50/50 ring-1 ring-orange-500' 
-                        : 'border-slate-100 hover:border-slate-200 bg-white'
+                        ? 'border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/5 shadow-md shadow-orange-500/10' 
+                        : 'border-slate-100 hover:border-slate-300 hover:shadow-sm bg-white'
                     }`}
                   >
-                    <div className="flex justify-between items-start mb-2">
-                       <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                         {new Date(log.changedAt).toLocaleString()}
-                       </span>
-                       <span className="px-2 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-500 rounded-full uppercase tracking-tighter">
+                    <div className="flex justify-between items-center mb-4">
+                       <div className="flex items-center gap-2">
+                         <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-slate-200 transition-colors">
+                           <History className="w-4 h-4" />
+                         </div>
+                         <div>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block leading-none mb-1">
+                              {new Date(log.changedAt).toLocaleDateString()}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-500 block leading-none">
+                              {new Date(log.changedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                         </div>
+                       </div>
+                       <div className="px-2.5 py-1 bg-white border border-slate-100 text-[10px] font-black text-slate-900 rounded-lg uppercase tracking-wider shadow-sm">
                          {Object.keys(log.changes || {}).length} Changes
-                       </span>
+                       </div>
                     </div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                    
+                    <div className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 rounded-xl mb-4 border border-slate-100">
+                      <div className="w-6 h-6 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-400">
                         {log.changedByName?.charAt(0) || 'U'}
                       </div>
-                      <span className="text-sm font-medium text-slate-700 font-mono text-[10px] uppercase">{log.changedByName}</span>
+                      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{log.changedByName}</span>
                     </div>
-                    <div className="space-y-1">
+
+                    <div className="flex flex-wrap gap-1.5 mt-auto">
                       {Object.keys(log.changes || {}).slice(0, 3).map(field => (
-                        <div key={field} className="text-[10px] text-slate-500 flex items-center gap-1">
-                          <Edit2 className="w-3 h-3 text-rose-400" />
-                          <span className="truncate">{field.replace('formData.', '')}</span>
-                        </div>
+                        <span key={field} className="px-2 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded text-[9px] font-bold uppercase tracking-tighter truncate max-w-[120px]">
+                          {field.replace('formData.', '')}
+                        </span>
                       ))}
                       {Object.keys(log.changes || {}).length > 3 && (
-                        <div className="text-[10px] text-slate-400 italic">
-                          + {Object.keys(log.changes || {}).length - 3} more fields
-                        </div>
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-400 rounded text-[9px] font-bold uppercase tracking-tighter">
+                          +{Object.keys(log.changes || {}).length - 3}
+                        </span>
                       )}
                     </div>
                   </button>
@@ -1489,6 +1514,76 @@ export default function InspectionTab() {
               </div>
             </div>
 
+            {/* Weight & BOP Details */}
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4 flex items-center gap-2">
+                <Scale className="w-4 h-4" /> Weight & BOP Configuration
+              </h3>
+              <div className="space-y-6">
+                <HighlightField label="Base Minimum Weight" value={data.baseWeight ? `${data.baseWeight} kg` : 'Not Selected'} fieldPath="formData.baseWeight" />
+                
+                {data.dynamicWeights && data.dynamicWeights.length > 0 && (
+                  <div>
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Dynamic Adjustments</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {data.dynamicWeights.map((w: any, idx: number) => (
+                        <div key={idx} className={`p-3 rounded-xl border ${w.isChecked ? 'bg-orange-50/30 border-orange-100' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-medium text-slate-700">{w.condition || w.title}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${w.isChecked ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                              {w.weight > 0 ? '+' : ''}{w.weight} kg
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Official Safety Check */}
+            {!isCompetitor && (
+              <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" /> Official Safety Check
+                </h3>
+                <div className="space-y-8">
+                  <div>
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Car Lights</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <HighlightField label="Head Light" value={data.carLight?.headLight} fieldPath="formData.carLight.headLight" />
+                      <HighlightField label="Turn Signal" value={data.carLight?.turnSignal} fieldPath="formData.carLight.turnSignal" />
+                      <HighlightField label="Tail Light" value={data.carLight?.tailLight} fieldPath="formData.carLight.tailLight" />
+                      <HighlightField label="Break Light" value={data.carLight?.breakLight} fieldPath="formData.carLight.breakLight" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Racer Safety</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <HighlightField label="Helmet" value={data.racerSafety?.helmet} fieldPath="formData.racerSafety.helmet" />
+                      <HighlightField label="HANS" value={data.racerSafety?.hans} fieldPath="formData.racerSafety.hans" />
+                      <HighlightField label="Balaclava" value={data.racerSafety?.balaclava} fieldPath="formData.racerSafety.balaclava" />
+                      <HighlightField label="Glove" value={data.racerSafety?.glove} fieldPath="formData.racerSafety.glove" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Seals & Technical */}
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4 flex items-center gap-2">
+                <Settings2 className="w-4 h-4" /> Seals & Technical
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <HighlightField label="Engine Seal" value={data.engineSealNumber} fieldPath="formData.engineSealNumber" />
+                <HighlightField label="Gear Seal" value={data.gearSealNumber} fieldPath="formData.gearSealNumber" />
+                <HighlightField label="Smoke Detector" value={data.ptrsSmokeDetector} fieldPath="formData.ptrsSmokeDetector" />
+                <HighlightField label="Weight Post-Race 2" value={data.weightAddedAfterRace2} fieldPath="formData.weightAddedAfterRace2" />
+              </div>
+            </div>
+
             {/* Uploaded Pictures */}
             <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-8">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 border-b border-slate-100 pb-4">Uploaded Pictures</h3>
@@ -1838,10 +1933,13 @@ export default function InspectionTab() {
 
                             <div className="flex-1 overflow-auto bg-slate-100 p-4 md:p-8 flex items-center justify-center min-h-[400px]">
                               {formData.series ? (
-                                <img 
+                                <Image 
                                   src={getStickerGuideImage(formData.series, formData.eventYear)} 
                                   alt={`${formData.series} Sticker Guide`}
+                                  width={1200}
+                                  height={800}
                                   className="max-w-full max-h-full object-contain rounded-xl shadow-lg border border-white/50"
+                                  unoptimized
                                 />
                               ) : (
                                 <div className="text-center py-20">
@@ -1879,90 +1977,111 @@ export default function InspectionTab() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="space-y-8"
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="h-px flex-1 bg-slate-100"></div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Competitor Entries / ข้อมูลจากผู้สมัคร</span>
-                    <div className="h-px flex-1 bg-slate-100"></div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 border-b border-slate-100 pb-4">
-                    <div>
-                      <h3 className="text-2xl font-light text-slate-900 tracking-tight">Calculated Weight & BOP</h3>
-                      <p className="text-sm text-slate-500 mt-1">Base minimum weights and series-specific penalties are automatically synchronized based on current rules.</p>
-                    </div>
+                  <div className="flex flex-col gap-2 mb-12 pb-8 border-b border-slate-100/60">
+                    <h3 className="text-3xl font-normal text-slate-900 tracking-tight">Weight & BOP</h3>
+                    <p className="text-base text-slate-500 max-w-2xl">
+                      Calculated weight includes all penalties, dynamic adjustments, and technical declarations.
+                    </p>
                   </div>
                   
-                  <div className="grid grid-cols-1 gap-8">
+                  <div className="space-y-16">
                     {/* Base Minimum Weight Section */}
-                    <div>
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Base Minimum Weight</h3>
+                    <section>
+                      <div className="flex justify-between items-center mb-8">
+                        <div>
+                          <h3 className="text-xl font-medium text-slate-900">Base Weight</h3>
+                          <p className="text-sm text-slate-500 mt-1">Select or add the foundation weight</p>
+                        </div>
                         <button 
                             onClick={() => {
                               const newOptions = [...(formData.baseWeightOptions || [])];
                               newOptions.push({ id: Date.now().toString(), title: 'Custom', condition: '', weight: 0, isCustom: true });
                               handleChange('baseWeightOptions', newOptions);
                             }}
-                           className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors"
+                           className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 border border-slate-200/60 text-slate-700 rounded-full text-sm font-medium hover:bg-slate-100/80 transition-all active:scale-95"
                         >
-                           <Plus className="w-3.5 h-3.5" /> Add Options
+                           <Plus className="w-4 h-4" /> Custom Weight
                         </button>
                       </div>
 
                       {(formData.baseWeightOptions && formData.baseWeightOptions.length > 0) ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                           {formData.baseWeightOptions.map((opt: any, index: number) => {
+                            const isSelected = formData.baseWeight === opt.weight.toString();
+                            
                             if (!opt.isCustom) {
                               return (
-                                <label key={opt.id} className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-all ${formData.baseWeight === opt.weight.toString() ? 'border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
-                                  <div className="flex items-center gap-3">
+                                <label 
+                                  key={opt.id} 
+                                  className={`group relative flex flex-col p-6 rounded-[24px] border cursor-pointer transition-all duration-300 ${
+                                    isSelected 
+                                    ? 'border-orange-500/30 bg-orange-50/20 shadow-sm' 
+                                    : 'border-slate-200/60 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-start mb-6">
                                     <input 
                                       type="radio" 
                                       name="baseWeightSelection"
-                                      checked={formData.baseWeight === opt.weight.toString()} 
+                                      checked={isSelected} 
                                       onChange={() => handleChange('baseWeight', opt.weight.toString())}
-                                      className="rounded-full border-slate-300 text-orange-500 focus:ring-orange-500 w-4 h-4"
+                                      className="w-5 h-5 rounded-full border-slate-300 text-orange-500 focus:ring-orange-500 focus:ring-offset-orange-50 bg-white cursor-pointer"
                                     />
-                                    <div>
-                                      <p className="text-sm font-medium text-slate-900 leading-none mb-1.5">{opt.condition}</p>
-                                      <p className="text-xs text-slate-500">{opt.title}</p>
+                                    <div className={`px-3 py-1 rounded-full text-xs font-semibold tracking-wide ${isSelected ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                      {opt.weight} kg
                                     </div>
                                   </div>
-                                  <span className="font-mono text-sm font-medium text-slate-700 bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-md">{opt.weight} kg</span>
+                                  <div className="space-y-1.5 mt-auto">
+                                    <p className={`text-base font-medium transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>{opt.condition}</p>
+                                    <p className="text-sm font-normal text-slate-500">{opt.title}</p>
+                                  </div>
                                 </label>
                               );
                             }
 
                             return (
-                              <div key={opt.id} className="col-span-1 md:col-span-2 flex flex-col md:flex-row gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-200 border-dashed">
-                                <label className="flex items-center gap-2 cursor-pointer pl-1">
+                              <div key={opt.id} className="col-span-1 md:col-span-2 lg:col-span-3 flex flex-col md:flex-row gap-6 items-center p-6 rounded-[24px] border border-slate-200 bg-white shadow-sm shadow-slate-100/50">
+                                <label className="flex items-center gap-2 cursor-pointer self-start md:self-center">
                                   <input 
                                     type="radio" 
                                     name="baseWeightSelection"
-                                    checked={formData.baseWeight === opt.weight.toString()} 
+                                    checked={isSelected} 
                                     onChange={() => handleChange('baseWeight', opt.weight.toString())}
-                                    className="rounded-full border-slate-300 text-orange-500 focus:ring-orange-500 w-4 h-4"
+                                    className="w-5 h-5 rounded-full border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
                                   />
                                 </label>
-                                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  <input type="text" value={opt.title} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].title = e.target.value; handleChange('baseWeightOptions', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="Title (e.g. ความจุระบอกสูบ)" />
-                                  <input type="text" value={opt.condition} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].condition = e.target.value; handleChange('baseWeightOptions', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="Condition" />
+                                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-600">Model / CC</label>
+                                    <input type="text" value={opt.title} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].title = e.target.value; handleChange('baseWeightOptions', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 focus:ring-0 focus:border-orange-500 outline-none transition-colors placeholder:text-slate-300 text-base" placeholder="e.g. ความจุระบอกสูบ" />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-600">Condition</label>
+                                    <input type="text" value={opt.condition} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].condition = e.target.value; handleChange('baseWeightOptions', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 focus:ring-0 focus:border-orange-500 outline-none transition-colors placeholder:text-slate-300 text-base" placeholder="Ex: 2WD 4 doors" />
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <input type="number" value={opt.weight} onChange={e => {
-                                      const val = e.target.value;
-                                      const newW = [...formData.baseWeightOptions]; 
-                                      newW[index].weight = Number(val); 
-                                      handleChange('baseWeightOptions', newW);
-                                      if (formData.baseWeight === opt.weight.toString()) {
-                                        handleChange('baseWeight', val);
-                                      }
-                                  }} className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono text-center focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="0" />
+                                <div className="flex flex-row items-center gap-6 shrink-0 mt-4 md:mt-0 w-full md:w-auto">
+                                  <div className="space-y-2 flex-1 md:w-28 text-right md:text-left">
+                                    <label className="text-sm font-medium text-slate-600 w-full inline-block text-left">Weight</label>
+                                    <div className="relative flex items-center w-full">
+                                      <input type="number" value={opt.weight} onChange={e => {
+                                          const val = e.target.value;
+                                          const newW = [...formData.baseWeightOptions]; 
+                                          newW[index].weight = Number(val); 
+                                          handleChange('baseWeightOptions', newW);
+                                          if (formData.baseWeight === opt.weight.toString()) {
+                                            handleChange('baseWeight', val);
+                                          }
+                                      }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 text-xl focus:ring-0 focus:border-orange-500 outline-none transition-colors font-medium text-left md:text-center pl-1 pr-8" placeholder="0" />
+                                      <span className="absolute right-0 text-slate-400 text-base pointer-events-none pb-0">kg</span>
+                                    </div>
+                                  </div>
                                   <button onClick={() => { 
                                     const newW = formData.baseWeightOptions.filter((_: any, i: number) => i !== index); 
                                     handleChange('baseWeightOptions', newW); 
                                     if (formData.baseWeight === opt.weight.toString()) handleChange('baseWeight', '');
-                                  }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                                    <X className="w-4 h-4" />
+                                  }} className="p-3 md:mt-6 text-slate-400 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors">
+                                    <Trash2 className="w-5 h-5" />
                                   </button>
                                 </div>
                               </div>
@@ -1970,80 +2089,113 @@ export default function InspectionTab() {
                           })}
                         </div>
                       ) : (
-                        <div className="text-center py-12 bg-slate-50 border border-slate-100 border-dashed rounded-xl">
-                          <Scale className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                          <p className="text-sm text-slate-500 font-medium">No base weights loaded</p>
-                          <p className="text-xs text-slate-400 mt-1 mb-4">Sync rules or add your own options manually.</p>
+                        <div className="text-center py-16 bg-slate-50/50 border border-slate-200/60 rounded-[32px]">
+                          <Scale className="w-8 h-8 text-slate-300 mx-auto mb-4" />
+                          <p className="text-base text-slate-600 font-medium tracking-tight">No base weights defined</p>
+                          <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">Weights are synchronized with series rules or can be added manually.</p>
                         </div>
                       )}
-                    </div>
+                    </section>
 
                     {/* Dynamic Penalty Weights Section */}
-                    <div>
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Dynamic Penalties & Bonuses</h3>
+                    <section>
+                      <div className="flex justify-between items-center mb-8">
+                        <div>
+                          <h3 className="text-xl font-medium text-slate-900">Dynamic Adjustments</h3>
+                          <p className="text-sm text-slate-500 mt-1">Penalties and bonuses from the rulebook</p>
+                        </div>
                         <button 
                            onClick={() => {
                              const newWeights = [...(formData.dynamicWeights || [])];
                              newWeights.push({ id: Date.now().toString(), title: 'Custom', condition: '', weight: 0, isChecked: true, isCustom: true });
                              handleChange('dynamicWeights', newWeights);
                            }}
-                           className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors"
+                           className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 border border-slate-200/60 text-slate-700 rounded-full text-sm font-medium hover:bg-slate-100/80 transition-all active:scale-95"
                         >
-                           <Plus className="w-3.5 h-3.5" /> Add Rule
+                           <Plus className="w-4 h-4" /> Add Adjustment
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {(formData.dynamicWeights || []).map((wItem: any, index: number) => {
+                          const isChecked = wItem.isChecked;
+                          
                           if (!wItem.isCustom) {
                             return (
-                              <label key={wItem.id} className={`flex items-start justify-between p-4 border rounded-xl cursor-pointer transition-all ${wItem.isChecked ? 'border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
-                                <div className="flex items-start gap-3">
-                                   <input 
-                                     type="checkbox" 
-                                     checked={wItem.isChecked} 
-                                     onChange={(e) => {
-                                       const newW = [...formData.dynamicWeights];
-                                       newW[index].isChecked = e.target.checked;
-                                       handleChange('dynamicWeights', newW);
-                                     }}
-                                     className="w-4 h-4 mt-0.5 text-orange-500 border-slate-300 focus:ring-orange-500 rounded" 
-                                   />
+                              <label 
+                                key={wItem.id} 
+                                className={`group flex items-center justify-between p-5 rounded-[24px] border cursor-pointer transition-all duration-300 ${
+                                  isChecked 
+                                  ? 'border-orange-500/30 bg-orange-50/20 shadow-sm' 
+                                  : 'border-slate-200/60 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                                }`}
+                              >
+                                <div className="flex items-center gap-5 flex-1">
+                                   <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${isChecked ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-200 text-slate-400 group-hover:bg-slate-300'}`}>
+                                      <Check className={`w-3.5 h-3.5 ${isChecked ? 'opacity-100' : 'opacity-0'}`} />
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isChecked} 
+                                        onChange={(e) => {
+                                          const newW = [...formData.dynamicWeights];
+                                          newW[index].isChecked = e.target.checked;
+                                          handleChange('dynamicWeights', newW);
+                                        }}
+                                        className="hidden" 
+                                      />
+                                   </div>
                                    <div>
-                                     <p className="text-sm font-medium text-slate-900 leading-tight mb-1.5 pr-2">{wItem.condition}</p>
-                                     {wItem.title && <p className="text-xs text-slate-500">{wItem.title}</p>}
+                                     <p className={`text-base font-medium leading-tight mb-1 pr-6 ${isChecked ? 'text-slate-900' : 'text-slate-700'}`}>{wItem.condition}</p>
+                                     {wItem.title && <p className="text-sm text-slate-500 font-normal">{wItem.title}</p>}
                                    </div>
                                 </div>
-                                <span className={`font-mono text-sm font-medium px-2.5 py-1 rounded-md shrink-0 border ${wItem.weight > 0 ? 'text-rose-700 bg-rose-50 border-rose-200' : wItem.weight < 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-700 bg-slate-100 border-slate-200'}`}>
+                                <div className={`shrink-0 flex items-center justify-center min-w-[70px] py-1.5 px-3 rounded-full border font-bold text-sm shadow-sm ${
+                                  isChecked 
+                                  ? (wItem.weight > 0 ? 'bg-rose-500 border-rose-600 text-white' : wItem.weight < 0 ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-slate-800 border-slate-900 text-white')
+                                  : 'bg-white border-slate-200 text-slate-400'
+                                }`}>
                                   {wItem.weight > 0 ? '+' : ''}{wItem.weight}
-                                </span>
+                                  <span className="ml-1 text-[10px] font-semibold opacity-80">kg</span>
+                                </div>
                               </label>
                             );
                           }
                           
                           return (
-                            <div key={wItem.id} className="col-span-1 md:col-span-2 flex flex-col md:flex-row gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-200 border-dashed">
-                              <label className="flex items-center gap-2 cursor-pointer pl-1">
+                            <div key={wItem.id} className="col-span-1 lg:col-span-2 flex flex-col md:flex-row gap-6 items-center p-6 rounded-[24px] border border-slate-200 bg-white shadow-sm shadow-slate-100/50">
+                              <label className={`w-6 h-6 rounded-md flex items-center justify-center cursor-pointer transition-colors shrink-0 self-start md:self-center mt-2 md:mt-0 ${isChecked ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-200 text-slate-400'}`}>
+                                <Check className={`w-3.5 h-3.5 ${isChecked ? 'opacity-100' : 'opacity-0'}`} />
                                 <input 
                                   type="checkbox" 
-                                  checked={wItem.isChecked} 
+                                  checked={isChecked} 
                                   onChange={(e) => {
                                     const newW = [...formData.dynamicWeights];
                                     newW[index].isChecked = e.target.checked;
                                     handleChange('dynamicWeights', newW);
                                   }}
-                                  className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 w-4 h-4"
+                                  className="hidden"
                                 />
                               </label>
-                              <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-2">
-                                <input type="text" value={wItem.title} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].title = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="Title (e.g. รายการ)" />
-                                <input type="text" value={wItem.condition} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].condition = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" placeholder="Condition details" />
+                              <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-slate-600">Adjustment Name</label>
+                                  <input type="text" value={wItem.title} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].title = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 focus:ring-0 focus:border-orange-500 outline-none transition-colors placeholder:text-slate-300 text-base" placeholder="e.g. Success Ballast" />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-slate-600">Description</label>
+                                  <input type="text" value={wItem.condition} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].condition = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 focus:ring-0 focus:border-orange-500 outline-none transition-colors placeholder:text-slate-300 text-base" placeholder="Reason for adjustment" />
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <input type="number" value={wItem.weight} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].weight = Number(e.target.value); handleChange('dynamicWeights', newW); }} className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono text-center focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all" />
-                                <button onClick={() => { const newW = formData.dynamicWeights.filter((_: any, i: number) => i !== index); handleChange('dynamicWeights', newW); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                                  <X className="w-4 h-4" />
+                              <div className="flex flex-row items-center gap-6 shrink-0 mt-4 md:mt-0 w-full md:w-auto">
+                                <div className="space-y-2 flex-1 md:w-28 text-right md:text-left">
+                                  <label className="text-sm font-medium text-slate-600 w-full inline-block text-left">Value</label>
+                                  <div className="relative flex items-center w-full">
+                                    <input type="number" value={wItem.weight} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].weight = Number(e.target.value); handleChange('dynamicWeights', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 text-xl focus:ring-0 focus:border-orange-500 outline-none transition-colors font-medium text-left md:text-center pl-1 pr-8" placeholder="0" />
+                                    <span className="absolute right-0 text-slate-400 text-base pointer-events-none pb-0">kg</span>
+                                  </div>
+                                </div>
+                                <button onClick={() => { const newW = formData.dynamicWeights.filter((_: any, i: number) => i !== index); handleChange('dynamicWeights', newW); }} className="p-3 md:mt-6 text-slate-400 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors">
+                                  <Trash2 className="w-5 h-5" />
                                 </button>
                               </div>
                             </div>
@@ -2052,76 +2204,97 @@ export default function InspectionTab() {
                       </div>
                       
                       {(!formData.dynamicWeights || formData.dynamicWeights.length === 0) && (
-                        <div className="text-center py-8 bg-slate-50 border border-slate-100 border-dashed rounded-xl">
-                          <p className="text-sm text-slate-500 font-medium">No penalty/bonus active</p>
+                        <div className="text-center py-12 bg-slate-50/50 border border-slate-200/60 rounded-[32px]">
+                          <p className="text-base text-slate-600 font-medium tracking-tight">No active adjustments</p>
                         </div>
                       )}
-                    </div>
-                  </div>
+                    </section>
 
-                  {/* Custom Tables Mapping */}
-                  {formData.customTablesData && formData.customTablesData.length > 0 && formData.customTablesData.map((table: any) => (
-                    <div key={table.id} className="mt-8">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">{table.title}</h3>
-                      </div>
-                      <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
-                        {table.rows.map((row: any) => {
-                          const condition = table.columns.map((c: string) => row.values[c] || '-').join(' | ');
-                          let labelAdd = '';
-                          if (table.hasCommitteeWeight && row.committeeWeight) labelAdd = ` (+${row.committeeWeight}kg Vary Weight)`;
+                    {/* Custom Tables Mapping */}
+                    {formData.customTablesData && formData.customTablesData.length > 0 && formData.customTablesData.map((table: any) => (
+                      <section key={table.id}>
+                        <div className="mb-6">
+                            <h3 className="text-xl font-medium text-slate-900">{table.title}</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {table.rows.map((row: any) => {
+                            const condition = table.columns.map((c: string) => row.values[c] || '-').join(' | ');
+                            let labelAdd = '';
+                            if (table.hasCommitteeWeight && row.committeeWeight) labelAdd = ` (+${row.committeeWeight}kg Vary Weight)`;
 
-                          const isChecked = table.selectionType === 'single' 
-                              ? formData.customTablesSelections?.[table.id] === row.id 
-                              : formData.customTablesSelections?.[table.id]?.includes(row.id);
-                              
-                          return (
-                            <label key={row.id} className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-all ${isChecked ? 'border-orange-500 bg-orange-50/50 ring-1 ring-orange-500 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
-                              <div className="flex items-center gap-3">
-                                 <input 
-                                   type={table.selectionType === 'single' ? 'radio' : 'checkbox'} 
-                                   checked={isChecked || false}
-                                   onChange={(e) => {
-                                     const newSelections = { ...(formData.customTablesSelections || {}) };
-                                     if (table.selectionType === 'single') {
-                                       newSelections[table.id] = row.id;
-                                     } else {
-                                       let currentArr = newSelections[table.id] || [];
-                                       if (!Array.isArray(currentArr)) currentArr = [currentArr as string];
-                                       if (e.target.checked) {
-                                         newSelections[table.id] = [...currentArr, row.id];
+                            const isChecked = table.selectionType === 'single' 
+                                ? formData.customTablesSelections?.[table.id] === row.id 
+                                : formData.customTablesSelections?.[table.id]?.includes(row.id);
+                                
+                            return (
+                              <label 
+                                key={row.id} 
+                                className={`group flex flex-col p-6 rounded-[24px] border cursor-pointer transition-all duration-300 ${
+                                  isChecked 
+                                  ? 'border-orange-500/30 bg-orange-50/20 shadow-sm' 
+                                  : 'border-slate-200/60 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                                }`}
+                              >
+                                <div className="flex justify-between items-start mb-5">
+                                   <div className={`flex items-center justify-center w-6 h-6 border ${table.selectionType === 'single' ? 'rounded-full' : 'rounded-md'} transition-colors ${isChecked ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-white group-hover:border-slate-400'}`}>
+                                     {isChecked && (
+                                       table.selectionType === 'single' 
+                                         ? <div className="w-2.5 h-2.5 bg-white rounded-full" />
+                                         : <Check className="w-4 h-4 text-white" />
+                                     )}
+                                   </div>
+                                   <input 
+                                     type={table.selectionType === 'single' ? 'radio' : 'checkbox'} 
+                                     checked={isChecked || false}
+                                     onChange={(e) => {
+                                       const newSelections = { ...(formData.customTablesSelections || {}) };
+                                       if (table.selectionType === 'single') {
+                                         newSelections[table.id] = row.id;
                                        } else {
-                                         newSelections[table.id] = currentArr.filter((rId: string) => rId !== row.id);
+                                         let currentArr = newSelections[table.id] || [];
+                                         if (!Array.isArray(currentArr)) currentArr = [currentArr as string];
+                                         if (e.target.checked) {
+                                           newSelections[table.id] = [...currentArr, row.id];
+                                         } else {
+                                           newSelections[table.id] = currentArr.filter((rId: string) => rId !== row.id);
+                                         }
                                        }
-                                     }
-                                     handleChange('customTablesSelections', newSelections);
-                                   }}
-                                   className={`border-slate-300 text-orange-500 focus:ring-orange-500 w-4 h-4 ${table.selectionType === 'single' ? 'rounded-full' : 'rounded'}`}
-                                 />
-                                 <div>
-                                    <p className="text-sm font-medium text-slate-900 leading-none mb-1.5">{condition} {labelAdd}</p>
-                                 </div>
-                              </div>
-                              {table.hasWeight && <span className="font-mono text-sm font-medium text-slate-700 bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-md">{row.weight} kg</span>}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                                       handleChange('customTablesSelections', newSelections);
+                                     }}
+                                     className="hidden"
+                                   />
+                                   {table.hasWeight && (
+                                     <div className={`px-3 py-1 rounded-full text-xs font-semibold ${isChecked ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                       {row.weight} kg
+                                     </div>
+                                   )}
+                                </div>
+                                <div className="space-y-1">
+                                   <p className={`text-base font-medium transition-colors ${isChecked ? 'text-slate-900' : 'text-slate-700'}`}>{condition}</p>
+                                   {labelAdd && <p className="text-xs text-orange-500 font-medium">{labelAdd}</p>}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))}
 
-                  <div className="relative mt-8">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-rose-500 rounded-2xl blur opacity-20"></div>
-                    <div className="relative bg-white/80 backdrop-blur-xl border border-white/50 shadow-sm p-6 sm:p-8 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-400 tracking-widest uppercase mb-1">Final Result</h4>
-                        <p className="text-slate-800 font-medium">Total Calculated Balance Of Performance</p>
-                      </div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-rose-600">
-                          {calculateTotalWeight()}
-                        </span>
-                        <span className="text-xl font-bold text-orange-400">kg</span>
+                    <div className="mt-8 pt-8 border-t border-slate-200">
+                      <div className="bg-slate-50 rounded-[32px] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 border border-slate-200/60">
+                        <div>
+                          <h4 className="text-2xl font-medium text-slate-900 mb-2">Final Weight</h4>
+                          <p className="text-base text-slate-500 max-w-md">Total calculated weight including all selected base weights, dynamic adjustments, and custom table modifiers.</p>
+                        </div>
+                        
+                        <div className="shrink-0 bg-white py-6 px-10 rounded-[28px] border border-slate-200 shadow-sm shadow-slate-100">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-6xl font-medium tracking-tight text-slate-900">
+                              {calculateTotalWeight()}
+                            </span>
+                            <span className="text-xl font-medium text-slate-400">kg</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

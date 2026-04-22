@@ -20,6 +20,7 @@ import {
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc, deleteDoc, where } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
+import { createNotification } from '@/lib/notifications';
 import { useAppStore } from '@/lib/store';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { PORTRAIT_BG } from '@/lib/base64-bg';
@@ -459,6 +460,14 @@ export default function RequestTab() {
           ...newRequest,
           updatedAt: new Date().toISOString()
         });
+        
+        createNotification({
+          targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward'],
+          title: 'Request Updated',
+          message: `${auth.currentUser.displayName || auth.currentUser.email} updated request.`,
+          type: 'request_update',
+          link: 'request',
+        });
       } else {
         const newId = `REQ-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
         await setDoc(doc(db, 'requests', newId), {
@@ -467,6 +476,14 @@ export default function RequestTab() {
           userId: auth.currentUser.uid,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
+        });
+
+        createNotification({
+          targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward'],
+          title: 'New Request',
+          message: `${auth.currentUser.displayName || auth.currentUser.email} submitted a new request.`,
+          type: 'new_request',
+          link: 'request',
         });
       }
       
@@ -602,6 +619,13 @@ export default function RequestTab() {
       await updateDoc(doc(db, 'requests', id), {
         status: newStatus,
         updatedAt: new Date().toISOString()
+      });
+      createNotification({
+        targetRoles: ['admin', 'president', 'secretary', 'competitor', 'user'],
+        title: `Request ${newStatus}`,
+        message: `A request has been ${newStatus.toLowerCase()}.`,
+        type: 'request_status',
+        link: 'request',
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'requests');

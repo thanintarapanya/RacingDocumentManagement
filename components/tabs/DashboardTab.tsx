@@ -54,7 +54,7 @@ export default function DashboardTab() {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'car_inspections'));
 
     let unsubReports = () => {};
-    if (userRole !== 'competitor') {
+    if (userRole !== 'competitor' && userRole !== 'user') {
       unsubReports = onSnapshot(collection(db, 'reports'), (snapshot) => {
         setReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'reports'));
