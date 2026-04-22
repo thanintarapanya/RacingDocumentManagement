@@ -807,7 +807,7 @@ export default function RequestTab() {
                           </span>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-end gap-3 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={() => handleView(req)}
                               className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"

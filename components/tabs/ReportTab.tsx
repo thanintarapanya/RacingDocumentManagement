@@ -273,6 +273,11 @@ export default function ReportTab() {
 
   const handleSubmit = async () => {
     if (!auth.currentUser) return;
+
+    if (!confirm('Are you sure you want to submit? This report will be saved and can be reviewed by stewards.')) {
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -608,7 +613,7 @@ export default function ReportTab() {
                           </span>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-end gap-4 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={() => handleView(item)}
                               className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"

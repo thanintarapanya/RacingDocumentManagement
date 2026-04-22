@@ -201,12 +201,18 @@ export default function Home() {
             </AnimatePresence>
           </button>
         </div>
+        
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+          <p className={`text-[10px] font-medium text-slate-400 tracking-widest uppercase transition-opacity duration-300 ${!isSidebarOpen ? 'opacity-0 h-0 hidden' : 'opacity-100'}`}>
+            Racedoc powered by Embedded Linux Group Co.,Ltd.
+          </p>
+        </div>
       </motion.aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden m-4 ml-2 relative z-10 print:m-0 print:overflow-visible">
         {/* Topbar */}
-        <header className="glass-panel mb-4 h-16 flex items-center justify-between px-6 flex-shrink-0 print:hidden">
+        <header className="glass-panel mb-4 h-16 flex items-center justify-between px-6 flex-shrink-0 print:hidden relative z-30">
           <div className="flex items-center gap-4 flex-1">
             <div className="relative w-full max-w-md">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />

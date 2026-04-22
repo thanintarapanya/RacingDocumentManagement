@@ -160,12 +160,20 @@ export default function DashboardTab() {
   const approvedCount = requests.filter(r => r.status === 'Approved').length;
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
   const issuesFoundCount = reports.reduce((acc, r) => acc + (r.failedCars?.length || 0), 0);
+  const inspectionsSubmittedCount = inspections.filter(i => i.status !== 'Draft').length;
 
-  const stats = [
+  const isCompetitor = userRole === 'competitor' || userRole === 'user';
+
+  const stats = isCompetitor ? [
+    { title: 'My Entries', value: entries.length.toString(), icon: Users, trend: '+0%', positive: true },
+    { title: 'My Total Inspections', value: inspections.length.toString(), icon: CheckCircle, trend: '+0%', positive: true },
+    { title: 'My Pending Requests', value: pendingCount.toString(), icon: Clock, trend: 'Active', positive: true },
+    { title: 'Approved Requests', value: approvedCount.toString(), icon: CheckCircle, trend: 'Final', positive: true },
+  ] : [
     { title: 'Total Entries', value: entries.length.toString(), icon: Users, trend: '+12%', positive: true },
     { title: 'Approved Requests', value: approvedCount.toString(), icon: CheckCircle, trend: '+5%', positive: true },
     { title: 'Pending Requests', value: pendingCount.toString(), icon: Clock, trend: '-2%', positive: false },
-    { title: 'Issues Found', value: issuesFoundCount.toString(), icon: AlertTriangle, trend: '+1%', positive: false },
+    { title: 'Submited Inspections', value: inspectionsSubmittedCount.toString(), icon: AlertTriangle, trend: '+1%', positive: false },
   ];
 
   return (

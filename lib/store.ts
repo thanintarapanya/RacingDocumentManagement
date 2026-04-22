@@ -15,6 +15,7 @@ export type Entry = {
   carNumber: string;
   formData?: any;
   userId?: string;
+  status: 'Draft' | 'Submitted';
 };
 
 export type DeletedItem = {

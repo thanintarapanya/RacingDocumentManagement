@@ -561,6 +561,13 @@ export default function InspectionTab() {
 
   const handleSubmit = async (statusOverride?: 'Draft' | 'Waiting For Inspection' | 'Inspecting' | 'Pass' | 'Not Pass') => {
     if (!auth.currentUser) return;
+
+    if (!statusOverride || statusOverride !== 'Draft') {
+      if (!confirm('Are you sure you want to submit? This form will be locked and cannot be changed after submitting.')) {
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const finalStatus = (typeof statusOverride === 'string' ? statusOverride : formData.status) || 'Draft';
@@ -1210,7 +1217,7 @@ export default function InspectionTab() {
                         </span>
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-4 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
                             onClick={() => {
                               setSelectedHistoryCarNumber(item.carNumber);
@@ -1224,13 +1231,15 @@ export default function InspectionTab() {
                             <>
                               <button 
                                 onClick={() => handleEdit(item)}
-                                className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors"
+                                className="text-[11px] uppercase tracking-wider font-medium text-slate-400 hover:text-orange-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                disabled={isCompetitor && item.status !== 'Draft'}
                               >
                                 Edit
                               </button>
                               <button 
                                 onClick={() => handleDelete(item.id)}
-                                className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors"
+                                className="text-[11px] uppercase tracking-wider font-medium text-rose-400 hover:text-rose-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                disabled={isCompetitor && item.status !== 'Draft'}
                               >
                                 Delete
                               </button>

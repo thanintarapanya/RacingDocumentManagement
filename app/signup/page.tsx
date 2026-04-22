@@ -310,6 +310,9 @@ function SignupContent() {
         </div>
 
         <div className="mt-12 text-center space-y-4">
+          <p className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">
+            Racedoc powered by Embedded Linux Group Co.,Ltd.
+          </p>
           <p className="text-xs text-slate-400 font-light tracking-wide">
             {t[lang].alreadyHaveAccount} <button onClick={() => router.push('/login')} className="text-slate-900 hover:text-orange-500 transition-colors">{t[lang].signIn}</button>
           </p>

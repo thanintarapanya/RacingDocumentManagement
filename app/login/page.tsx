@@ -323,6 +323,9 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-12 text-center space-y-4">
+          <p className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">
+            Racedoc powered by Embedded Linux Group Co.,Ltd.
+          </p>
           <p className="text-xs text-slate-400 font-light tracking-wide">
             {t[lang].noAccount} <button onClick={() => router.push('/signup')} className="text-slate-900 hover:text-orange-500 transition-colors">{t[lang].signUp}</button>
           </p>
