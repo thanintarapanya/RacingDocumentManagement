@@ -101,9 +101,32 @@ export default function WeighInTab() {
     inspections.forEach(ins => {
       if (ins.carNumber && ins.formData) {
         let total = Number(ins.formData.baseWeight || 0);
+
+        // Dynamic Weights
         ins.formData.dynamicWeights?.forEach((d: any) => {
           if (d.isChecked) total += Number(d.weight || 0);
         });
+
+        // Custom Table Selections
+        if (ins.formData.customTablesData && ins.formData.customTablesSelections) {
+          ins.formData.customTablesData.forEach((table: any) => {
+            const selections = ins.formData.customTablesSelections[table.id];
+            if (selections) {
+              table.rows.forEach((row: any) => {
+                const isSelected = table.selectionType === 'single' ? selections === row.id : (Array.isArray(selections) && selections.includes(row.id));
+                if (isSelected) {
+                  if (table.hasWeight) total += Number(row.weight || 0);
+                  if (table.hasCommitteeWeight) total += Number(row.committeeWeight || 0);
+                }
+              });
+            }
+          });
+        }
+
+        // Include Success Ballast (placeholder for future)
+        const successBallast = Number(ins.formData.successBallast || 0);
+        total += successBallast;
+
         // Prefer latest inspection if multiple (assuming naturally sorted or last overrides)
         weights[ins.carNumber] = total;
       }

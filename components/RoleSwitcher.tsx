@@ -22,6 +22,10 @@ export function RoleSwitcher({ isSidebarOpen }: { isSidebarOpen: boolean }) {
   const userRole = useAppStore(state => state.userRole);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
+
   const handleRoleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newRole = e.target.value;
     if (!auth.currentUser) return;

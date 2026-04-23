@@ -206,6 +206,7 @@ const initialFormData = {
   }>,
   customTablesData: [] as any[],
   customTablesSelections: {} as Record<string, string | string[]>,
+  successBallast: 0,
   status: 'Draft' as 'Draft' | 'Waiting For Inspection' | 'Inspecting' | 'Pass' | 'Not Pass',
   notPassReasons: ''
 };
