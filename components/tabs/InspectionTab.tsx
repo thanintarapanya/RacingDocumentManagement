@@ -581,9 +581,9 @@ export default function InspectionTab() {
     });
   };
 
-  const handleComponentSwap = async (oldComponent: ComponentItem, newComponent: ComponentItem) => {
+  const handleComponentSwap = async (oldComponent: ComponentItem | undefined, newComponent: ComponentItem) => {
     const updatedComponents = formData.components.map((c: ComponentItem) => {
-      if (c.id === oldComponent.id) return { ...c, status: 'RETIRED' as const };
+      if (oldComponent && c.id === oldComponent.id) return { ...c, status: 'RETIRED' as const };
       if (c.id === newComponent.id) return { ...c, status: 'ACTIVE' as const };
       return c;
     });
@@ -598,8 +598,10 @@ export default function InspectionTab() {
           changedByName: auth.currentUser?.displayName || 'System',
           changedAt: new Date().toISOString(),
           type: 'EQUIPMENT_SWAP',
-          message: `Swapped ${oldComponent.type} from ${oldComponent.displayName || oldComponent.id} to ${newComponent.displayName || newComponent.id}`,
-          oldComponentId: oldComponent.id,
+          message: oldComponent 
+            ? `Swapped ${oldComponent.type} from ${oldComponent.displayName || oldComponent.id} to ${newComponent.displayName || newComponent.id}`
+            : `Activated ${newComponent.type} ${newComponent.displayName || newComponent.id}`,
+          oldComponentId: oldComponent?.id || null,
           newComponentId: newComponent.id,
           newData: { ...formData, components: updatedComponents },
           previousData: formData,
@@ -607,7 +609,7 @@ export default function InspectionTab() {
             'components': { old: formData.components, new: updatedComponents }
           }
         });
-        showToast(`Swapped ${oldComponent.type} successfully`);
+        showToast(oldComponent ? `Swapped ${oldComponent.type} successfully` : `Activated ${newComponent.type} successfully`);
       } catch (error) {
         console.error('Error logging swap:', error);
       }
@@ -2581,7 +2583,11 @@ export default function InspectionTab() {
                                <button 
                                  onClick={() => {
                                    const currentActive = formData.components.find((c: ComponentItem) => c.type === comp.type && c.status === 'ACTIVE');
-                                   if (confirm(`Swap ${comp.type}? This will Retire ${currentActive?.displayName || 'current'} and Activate ${comp.displayName}.`)) {
+                                   const confirmMsg = currentActive 
+                                     ? `Swap ${comp.type}? This will Retire ${currentActive.displayName || currentActive.id} and Activate ${comp.displayName || comp.id}.`
+                                     : `Set ${comp.type} ${comp.displayName || comp.id} as Active?`;
+                                   
+                                   if (confirm(confirmMsg)) {
                                      handleComponentSwap(currentActive, comp);
                                    }
                                  }}
