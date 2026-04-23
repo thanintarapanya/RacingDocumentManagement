@@ -383,7 +383,7 @@ export default function ReportTab() {
     });
   };
 
-  const renderInput = (label: string, field: keyof typeof formData, type = 'text') => (
+  const renderInput = (label: string, field: keyof typeof formData, type = 'text', placeholder?: string) => (
     <div className="space-y-2">
       <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">{label}</label>
       <input
@@ -391,7 +391,7 @@ export default function ReportTab() {
         value={formData[field] as string}
         onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
-        placeholder={`Enter ${label.toLowerCase()}`}
+        placeholder={placeholder || `Enter ${label.toLowerCase()}`}
         disabled={viewMode || !canEdit}
       />
     </div>
