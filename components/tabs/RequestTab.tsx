@@ -50,6 +50,7 @@ interface RequestItem {
   driverName?: string;
   carNumber?: string;
   series?: string;
+  grades?: string;
   licenseDriverNo?: string;
   licenseTeamManagerNo?: string;
   nameRequestPermission?: string;
@@ -127,6 +128,7 @@ export default function RequestTab() {
     driverName: '',
     carNumber: '',
     series: '',
+    grades: '',
     event: '',
     eventYear: new Date().getFullYear().toString(),
     licenseDriverNo: '',
@@ -174,7 +176,7 @@ export default function RequestTab() {
   const currentUser = auth.currentUser;
 
   const canEditAll = ['admin', 'secretary'].includes(userRole || '');
-  const canApprove = ['admin', 'president', 'steward', 'head_scrutineer', 'secretary'].includes(userRole || '');
+  const canApprove = ['admin', 'president', 'steward', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'secretary'].includes(userRole || '');
   const canEditOwn = userRole === 'competitor' || userRole === 'user';
   
   const isOwnDoc = editingId ? (requests.find(r => r.id === editingId)?.userId === currentUser?.uid) : true;
@@ -200,6 +202,7 @@ export default function RequestTab() {
       if (entry && entry.formData) {
         setNewRequest(prev => ({
           ...prev,
+          grades: entry.formData.grade || entry.formData.grades || entry.formData.class || entry.gradeRace || '',
           driverName: entry.formData.nameEnglish || entry.formData.nameThai || '',
           licenseDriverNo: entry.formData.competitionLicenseNo || '',
           licenseTeamManagerNo: entry.formData.licenseTeamManagerNo || '',
@@ -506,6 +509,7 @@ export default function RequestTab() {
       driverName: req.driverName || req.team || '',
       carNumber: req.carNumber || req.car || '',
       series: req.series || '',
+      grades: req.grades || '',
       event: req.event || '',
       eventYear: req.eventYear || '',
       licenseDriverNo: req.licenseDriverNo || '',
@@ -549,6 +553,7 @@ export default function RequestTab() {
       driverName: req.driverName || req.team || '',
       carNumber: req.carNumber || req.car || '',
       series: req.series || '',
+      grades: req.grades || '',
       event: req.event || '',
       eventYear: req.eventYear || '',
       licenseDriverNo: req.licenseDriverNo || '',
@@ -621,7 +626,7 @@ export default function RequestTab() {
         updatedAt: new Date().toISOString()
       });
       createNotification({
-        targetRoles: ['admin', 'president', 'secretary', 'competitor', 'user'],
+        targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward', 'competitor', 'user'],
         title: `Request ${newStatus}`,
         message: `A request has been ${newStatus.toLowerCase()}.`,
         type: 'request_status',
@@ -1573,6 +1578,17 @@ export default function RequestTab() {
                         placeholder="Car Number"
                         value={newRequest.carNumber || ''}
                         onChange={(e) => setNewRequest({...newRequest, carNumber: e.target.value})}
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                        disabled={viewMode || !canEdit}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Class / คลาส (Auto-filled)</label>
+                      <input 
+                        type="text"
+                        placeholder="Class"
+                        value={newRequest.grades || ''}
+                        onChange={(e) => setNewRequest({...newRequest, grades: e.target.value})}
                         className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all placeholder:text-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
                         disabled={viewMode || !canEdit}
                       />

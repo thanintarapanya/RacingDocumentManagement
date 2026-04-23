@@ -55,6 +55,16 @@ import stickerGroupA from '../stickers/Sticker_Layout_GroupA';
 import stickerGroupN from '../stickers/Sticker_Layout_GroupN';
 import stickerTruck from '../stickers/Sticker_Layout_Truck';
 
+type ComponentItem = {
+  id: string;
+  displayName: string;
+  type: 'Engine' | 'Gearbox';
+  sealNumbers: string[];
+  status: 'ACTIVE' | 'SPARE' | 'RETIRED';
+  isOffsite: boolean;
+  registeredAt: string;
+};
+
 type Inspection = {
   id: string;
   userId?: string;
@@ -163,8 +173,7 @@ const initialFormData = {
     shoes: false,
   },
   remark: '',
-  engineSealNumber: '',
-  gearSealNumber: '',
+  components: [] as ComponentItem[],
   tireMarkAmountStep3: '',
   ptrsSmokeDetector: false,
   weightAddedAfterRace2: false,
@@ -259,6 +268,13 @@ export default function InspectionTab() {
 
   const [formData, setFormData] = useState(initialFormData);
   const [showValidation, setShowValidation] = useState(false);
+  const [showAddComponentModal, setShowAddComponentModal] = useState(false);
+  const [newComponent, setNewComponent] = useState<Partial<ComponentItem>>({
+    type: 'Engine',
+    status: 'SPARE',
+    sealNumbers: [''],
+    isOffsite: false
+  });
 
   const canEditAll = ['admin', 'president', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'].includes(userRole || '');
   const canEditOwn = userRole === 'competitor' || userRole === 'user';
@@ -274,6 +290,10 @@ export default function InspectionTab() {
     const status = formData.status || 'Draft';
     
     if (isScrutineerRole) {
+      // Restriction: Only offsite_scrutineer and admin can check offsite fields
+      if (field === 'isOffsiteInspection' || field === 'isOffsite') {
+        return ['admin', 'offsite_scrutineer'].includes(userRole || '');
+      }
       return true;
     }
 
@@ -408,7 +428,7 @@ export default function InspectionTab() {
       if (entry && entry.formData) {
         setFormData(prev => ({
           ...prev,
-          grades: entry.formData.class || entry.formData.grades || '',
+          grades: entry.formData.class || entry.formData.grades || entry.formData.grade || entry.gradeRace || '',
           teamName: entry.formData.teamName || '',
           racerName: [entry.formData.nameEnglish, entry.formData.surnameEnglish].filter(Boolean).join(' ') || [entry.formData.nameThai, entry.formData.surnameThai].filter(Boolean).join(' ') || '',
           teamManagerName: entry.formData.teamManagerName || '',
@@ -557,6 +577,39 @@ export default function InspectionTab() {
       current[keys[keys.length - 1]] = value;
       return newState;
     });
+  };
+
+  const handleComponentSwap = async (oldComponent: ComponentItem, newComponent: ComponentItem) => {
+    const updatedComponents = formData.components.map((c: ComponentItem) => {
+      if (c.id === oldComponent.id) return { ...c, status: 'RETIRED' as const };
+      if (c.id === newComponent.id) return { ...c, status: 'ACTIVE' as const };
+      return c;
+    });
+
+    setFormData(prev => ({ ...prev, components: updatedComponents }));
+
+    if (editingId) {
+      try {
+        const logsRef = collection(db, 'car_inspections', editingId, 'history_logs');
+        await addDoc(logsRef, {
+          changedBy: auth.currentUser?.uid,
+          changedByName: auth.currentUser?.displayName || 'System',
+          changedAt: new Date().toISOString(),
+          type: 'EQUIPMENT_SWAP',
+          message: `Swapped ${oldComponent.type} from ${oldComponent.displayName || oldComponent.id} to ${newComponent.displayName || newComponent.id}`,
+          oldComponentId: oldComponent.id,
+          newComponentId: newComponent.id,
+          newData: { ...formData, components: updatedComponents },
+          previousData: formData,
+          changes: {
+            'components': { old: formData.components, new: updatedComponents }
+          }
+        });
+        showToast(`Swapped ${oldComponent.type} successfully`);
+      } catch (error) {
+        console.error('Error logging swap:', error);
+      }
+    }
   };
 
   const handleSubmit = async (statusOverride?: 'Draft' | 'Waiting For Inspection' | 'Inspecting' | 'Pass' | 'Not Pass') => {
@@ -917,6 +970,193 @@ export default function InspectionTab() {
     );
   }
 
+  const renderAddComponentModal = () => (
+    <AnimatePresence>
+      {showAddComponentModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowAddComponentModal(false)}
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          />
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-200"
+          >
+            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                 <div className="p-2.5 rounded-xl bg-white border border-slate-100 shadow-sm">
+                   <Plus className="w-5 h-5 text-orange-500" />
+                 </div>
+                 <div>
+                   <h3 className="font-bold text-slate-900">Add New Component</h3>
+                   <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Inventory Management</p>
+                 </div>
+              </div>
+              <button 
+                onClick={() => setShowAddComponentModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-8">
+              <div className="grid grid-cols-1 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Component Type</label>
+                  <select 
+                    value={newComponent.type}
+                    onChange={(e) => setNewComponent(prev => ({ ...prev, type: e.target.value as any }))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-slate-100 focus:border-slate-300 outline-none transition-all"
+                  >
+                    <option value="Engine">Engine</option>
+                    <option value="Gearbox">Gearbox</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initial Status</label>
+                <div className="flex gap-4">
+                  {['ACTIVE', 'SPARE'].map((s) => (
+                    <label key={s} className={`flex-1 flex items-center justify-center p-4 rounded-xl border cursor-pointer transition-all ${newComponent.status === s ? 'border-slate-900 bg-slate-900 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300'}`}>
+                      <input 
+                        type="radio" 
+                        className="hidden" 
+                        name="newCompStatus"
+                        checked={newComponent.status === s}
+                        onChange={() => setNewComponent(prev => ({ ...prev, status: s as any }))}
+                      />
+                      <span className="text-xs font-bold uppercase tracking-widest">{s}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Seal Numbers ({newComponent.sealNumbers?.length || 0}/4)</label>
+                  {(newComponent.sealNumbers?.length || 0) < 4 && (
+                    <button 
+                      onClick={() => setNewComponent(prev => ({ ...prev, sealNumbers: [...(prev.sealNumbers || []), ''] }))}
+                      className="text-[10px] font-bold text-slate-900 uppercase tracking-widest hover:underline"
+                    >
+                      + Add Another Seal
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {(newComponent.sealNumbers || []).map((seal, idx) => (
+                    <div key={idx} className="relative group">
+                      <input 
+                        type="text"
+                        placeholder={`Seal #${idx + 1}`}
+                        value={seal}
+                        onChange={(e) => {
+                          const updated = [...(newComponent.sealNumbers || [])];
+                          updated[idx] = e.target.value;
+                          setNewComponent(prev => ({ ...prev, sealNumbers: updated }));
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-slate-100 focus:border-slate-400 outline-none transition-all"
+                      />
+                      {idx > 0 && (
+                        <button 
+                          onClick={() => {
+                            const updated = (newComponent.sealNumbers || []).filter((_, i) => i !== idx);
+                            setNewComponent(prev => ({ ...prev, sealNumbers: updated }));
+                          }}
+                          className="absolute -right-2 -top-2 bg-slate-100 text-slate-400 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-slate-200"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {['admin', 'offsite_scrutineer'].includes(userRole || '') && (
+                <div className="pt-4 border-t border-slate-100">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${newComponent.isOffsite ? 'bg-slate-900 border-slate-900' : 'bg-white border-slate-200 group-hover:border-slate-300'}`}>
+                      {newComponent.isOffsite && <Check className="w-4 h-4 text-white" />}
+                    </div>
+                    <span className="text-sm font-medium text-slate-600">Offsite Inspected / ตรวจสภาพนอกสถานที่แล้ว</span>
+                    <input 
+                      type="checkbox" 
+                      className="hidden"
+                      checked={newComponent.isOffsite}
+                      onChange={(e) => setNewComponent(prev => ({ ...prev, isOffsite: e.target.checked }))}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+               <button 
+                 onClick={() => setShowAddComponentModal(false)}
+                 className="px-6 py-2.5 text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-slate-600"
+               >
+                 Cancel
+               </button>
+               <button 
+                 onClick={() => {
+                   if (!newComponent.type) {
+                     showToast('Please select Type');
+                     return;
+                   }
+                   
+                   // Auto-generate ID and DisplayName
+                   const components = [...(formData.components || [])];
+                   const sameTypeAndStatus = components.filter(c => c.type === newComponent.type && c.status === newComponent.status);
+                   const nextNum = sameTypeAndStatus.length + 1;
+                   const prefix = newComponent.status === 'SPARE' ? 'Spare ' : '';
+                   const displayName = `${prefix}${newComponent.type} ${nextNum}`;
+                   const id = crypto.randomUUID();
+
+                   const comp: ComponentItem = {
+                     id,
+                     displayName,
+                     type: newComponent.type as 'Engine' | 'Gearbox',
+                     sealNumbers: (newComponent.sealNumbers || []).filter(s => s.trim() !== ''),
+                     status: newComponent.status as any,
+                     isOffsite: !!newComponent.isOffsite,
+                     registeredAt: new Date().toISOString()
+                   };
+
+                   // Ensure only one ACTIVE per type
+                   if (comp.status === 'ACTIVE') {
+                     components.forEach(c => {
+                       if (c.type === comp.type && c.status === 'ACTIVE') {
+                         c.status = 'SPARE';
+                         // Recalculate display names for spares of this type?
+                         // User said "รันตัวเลขไปเรื่อยๆ" - maybe just keep it simple
+                       }
+                     });
+                   }
+                   
+                   handleChange('components', [...components, comp]);
+                   setShowAddComponentModal(false);
+                   setNewComponent({ type: 'Engine', status: 'SPARE', sealNumbers: [''], isOffsite: false });
+                   showToast(`${displayName} added to inventory`);
+                 }}
+                 className="px-8 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/10 active:scale-95"
+               >
+                 Register Component
+               </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
   const renderHistorySheet = () => (
     <AnimatePresence>
       {showHistorySheet && (
@@ -1117,7 +1357,7 @@ export default function InspectionTab() {
               onClick={() => {
                 setEditingId(null);
                 setFormData(initialFormData);
-                setCurrentStep(userRole === 'offsite-scrutineer' || userRole === 'offsite_scrutineer' ? 0 : 1);
+                setCurrentStep(['admin', 'offsite_scrutineer'].includes(userRole || '') ? 0 : 1);
                 setView('form');
               }}
               className="whitespace-nowrap px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-sm font-medium transition-all shadow-sm shadow-slate-900/10"
@@ -1382,6 +1622,7 @@ export default function InspectionTab() {
           </div>
         </motion.div>
         {renderHistorySheet()}
+        {renderAddComponentModal()}
         {renderToast()}
       </>
     );
@@ -1796,9 +2037,10 @@ export default function InspectionTab() {
                     </div>
                   </div>
                   
-                  {userRole === 'offsite_scrutineer' && (
-                    <div className="mt-6 p-4 bg-orange-50 border border-orange-100 rounded-xl">
+                  {['admin', 'offsite_scrutineer'].includes(userRole || '') && (
+                    <div className="mt-6 p-4 bg-orange-50 border border-orange-100 rounded-xl text-center">
                       {renderCheckbox('Offsite Inspection / ตรวจสภาพนอกสถานที่', 'isOffsiteInspection')}
+                      <p className="text-[10px] text-orange-600 mt-2 font-medium">Only Off-site Scrutineers can verify this field.</p>
                     </div>
                   )}
                 </motion.div>
@@ -1964,9 +2206,9 @@ export default function InspectionTab() {
                             <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50/50">
                               <button 
                                 onClick={() => setShowStickerModal(false)}
-                                className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-md active:scale-95"
+                                className="px-8 py-2.5 bg-slate-900 text-white rounded-full text-sm font-medium hover:bg-slate-800 transition-all shadow-md shadow-slate-900/10 active:scale-95"
                               >
-                                Close Bridge
+                                Got it
                               </button>
                             </div>
                           </motion.div>
@@ -1979,332 +2221,158 @@ export default function InspectionTab() {
 
               {currentStep === 3 && (
                 <motion.div
-                  key="stepWeight"
+                  key="stepWeightMinimal"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="space-y-8"
+                  className="space-y-6"
                 >
-                  <div className="flex flex-col gap-2 mb-12 pb-8 border-b border-slate-100/60">
-                    <h3 className="text-3xl font-normal text-slate-900 tracking-tight">Weight & BOP</h3>
-                    <p className="text-base text-slate-500 max-w-2xl">
-                      Calculated weight includes all penalties, dynamic adjustments, and technical declarations.
-                    </p>
+                  <div className="pb-4 border-b border-slate-100">
+                    <h3 className="text-xl font-medium text-slate-900">Weight & BOP</h3>
+                    <p className="text-xs text-slate-500 mt-1">Technical weight balance and dynamic adjustments.</p>
                   </div>
                   
-                  <div className="space-y-16">
-                    {/* Base Minimum Weight Section */}
-                    <section>
-                      <div className="flex justify-between items-center mb-8">
-                        <div>
-                          <h3 className="text-xl font-medium text-slate-900">Base Weight</h3>
-                          <p className="text-sm text-slate-500 mt-1">Select or add the foundation weight</p>
-                        </div>
-                        <button 
-                            onClick={() => {
-                              const newOptions = [...(formData.baseWeightOptions || [])];
-                              newOptions.push({ id: Date.now().toString(), title: 'Custom', condition: '', weight: 0, isCustom: true });
-                              handleChange('baseWeightOptions', newOptions);
-                            }}
-                           className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 border border-slate-200/60 text-slate-700 rounded-full text-sm font-medium hover:bg-slate-100/80 transition-all active:scale-95"
-                        >
-                           <Plus className="w-4 h-4" /> Custom Weight
-                        </button>
-                      </div>
-
-                      {(formData.baseWeightOptions && formData.baseWeightOptions.length > 0) ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {formData.baseWeightOptions.map((opt: any, index: number) => {
-                            const isSelected = formData.baseWeight === opt.weight.toString();
-                            
-                            if (!opt.isCustom) {
-                              return (
-                                <label 
-                                  key={opt.id} 
-                                  className={`group relative flex flex-col p-6 rounded-[24px] border cursor-pointer transition-all duration-300 ${
-                                    isSelected 
-                                    ? 'border-orange-500/30 bg-orange-50/20 shadow-sm' 
-                                    : 'border-slate-200/60 bg-white hover:border-slate-300 hover:bg-slate-50/50'
-                                  }`}
-                                >
-                                  <div className="flex justify-between items-start mb-6">
-                                    <input 
-                                      type="radio" 
-                                      name="baseWeightSelection"
-                                      checked={isSelected} 
-                                      onChange={() => handleChange('baseWeight', opt.weight.toString())}
-                                      className="w-5 h-5 rounded-full border-slate-300 text-orange-500 focus:ring-orange-500 focus:ring-offset-orange-50 bg-white cursor-pointer"
-                                    />
-                                    <div className={`px-3 py-1 rounded-full text-xs font-semibold tracking-wide ${isSelected ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                                      {opt.weight} kg
-                                    </div>
-                                  </div>
-                                  <div className="space-y-1.5 mt-auto">
-                                    <p className={`text-base font-medium transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>{opt.condition}</p>
-                                    <p className="text-sm font-normal text-slate-500">{opt.title}</p>
-                                  </div>
-                                </label>
-                              );
-                            }
-
-                            return (
-                              <div key={opt.id} className="col-span-1 md:col-span-2 lg:col-span-3 flex flex-col md:flex-row gap-6 items-center p-6 rounded-[24px] border border-slate-200 bg-white shadow-sm shadow-slate-100/50">
-                                <label className="flex items-center gap-2 cursor-pointer self-start md:self-center">
-                                  <input 
-                                    type="radio" 
-                                    name="baseWeightSelection"
-                                    checked={isSelected} 
-                                    onChange={() => handleChange('baseWeight', opt.weight.toString())}
-                                    className="w-5 h-5 rounded-full border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
-                                  />
-                                </label>
-                                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-8">
-                                  <div className="space-y-2">
-                                    <label className="text-sm font-medium text-slate-600">Model / CC</label>
-                                    <input type="text" value={opt.title} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].title = e.target.value; handleChange('baseWeightOptions', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 focus:ring-0 focus:border-orange-500 outline-none transition-colors placeholder:text-slate-300 text-base" placeholder="e.g. ความจุระบอกสูบ" />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <label className="text-sm font-medium text-slate-600">Condition</label>
-                                    <input type="text" value={opt.condition} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].condition = e.target.value; handleChange('baseWeightOptions', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 focus:ring-0 focus:border-orange-500 outline-none transition-colors placeholder:text-slate-300 text-base" placeholder="Ex: 2WD 4 doors" />
-                                  </div>
-                                </div>
-                                <div className="flex flex-row items-center gap-6 shrink-0 mt-4 md:mt-0 w-full md:w-auto">
-                                  <div className="space-y-2 flex-1 md:w-28 text-right md:text-left">
-                                    <label className="text-sm font-medium text-slate-600 w-full inline-block text-left">Weight</label>
-                                    <div className="relative flex items-center w-full">
-                                      <input type="number" value={opt.weight} onChange={e => {
-                                          const val = e.target.value;
-                                          const newW = [...formData.baseWeightOptions]; 
-                                          newW[index].weight = Number(val); 
-                                          handleChange('baseWeightOptions', newW);
-                                          if (formData.baseWeight === opt.weight.toString()) {
-                                            handleChange('baseWeight', val);
-                                          }
-                                      }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 text-xl focus:ring-0 focus:border-orange-500 outline-none transition-colors font-medium text-left md:text-center pl-1 pr-8" placeholder="0" />
-                                      <span className="absolute right-0 text-slate-400 text-base pointer-events-none pb-0">kg</span>
-                                    </div>
-                                  </div>
-                                  <button onClick={() => { 
-                                    const newW = formData.baseWeightOptions.filter((_: any, i: number) => i !== index); 
-                                    handleChange('baseWeightOptions', newW); 
-                                    if (formData.baseWeight === opt.weight.toString()) handleChange('baseWeight', '');
-                                  }} className="p-3 md:mt-6 text-slate-400 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors">
-                                    <Trash2 className="w-5 h-5" />
-                                  </button>
-                                </div>
+                  {/* Base Weight Table */}
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base Minimum Weight</span>
+                      <button 
+                        onClick={() => {
+                          const newOptions = [...(formData.baseWeightOptions || [])];
+                          newOptions.push({ id: Date.now().toString(), title: 'Custom', condition: '', weight: 0, isCustom: true });
+                          handleChange('baseWeightOptions', newOptions);
+                        }}
+                        className="text-[10px] font-bold text-slate-900 uppercase tracking-widest hover:underline"
+                      >
+                        + Add Custom
+                      </button>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {(formData.baseWeightOptions || []).map((opt: any, index: number) => (
+                        <div key={opt.id} className={`flex items-center px-6 py-4 hover:bg-slate-50 transition-all ${formData.baseWeight === opt.weight.toString() ? 'bg-slate-50/50' : ''}`}>
+                          <label className="flex items-center gap-4 flex-1 cursor-pointer">
+                            <input 
+                              type="radio" 
+                              name="baseWeightSelection"
+                              checked={formData.baseWeight === opt.weight.toString()} 
+                              onChange={() => handleChange('baseWeight', opt.weight.toString())}
+                              className="w-4 h-4 border-slate-300 text-slate-900 focus:ring-slate-900"
+                            />
+                            {opt.isCustom ? (
+                              <div className="flex-1 grid grid-cols-2 gap-4">
+                                <input type="text" value={opt.title} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].title = e.target.value; handleChange('baseWeightOptions', newW); }} className="px-3 py-1 bg-white border border-slate-200 rounded text-sm outline-none focus:border-slate-400" placeholder="Model/CC" />
+                                <input type="text" value={opt.condition} onChange={e => { const newW = [...formData.baseWeightOptions]; newW[index].condition = e.target.value; handleChange('baseWeightOptions', newW); }} className="px-3 py-1 bg-white border border-slate-200 rounded text-sm outline-none focus:border-slate-400" placeholder="Condition" />
                               </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-center py-16 bg-slate-50/50 border border-slate-200/60 rounded-[32px]">
-                          <Scale className="w-8 h-8 text-slate-300 mx-auto mb-4" />
-                          <p className="text-base text-slate-600 font-medium tracking-tight">No base weights defined</p>
-                          <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">Weights are synchronized with series rules or can be added manually.</p>
-                        </div>
-                      )}
-                    </section>
-
-                    {/* Dynamic Penalty Weights Section */}
-                    <section>
-                      <div className="flex justify-between items-center mb-8">
-                        <div>
-                          <h3 className="text-xl font-medium text-slate-900">Dynamic Adjustments</h3>
-                          <p className="text-sm text-slate-500 mt-1">Penalties and bonuses from the rulebook</p>
-                        </div>
-                        <button 
-                           onClick={() => {
-                             const newWeights = [...(formData.dynamicWeights || [])];
-                             newWeights.push({ id: Date.now().toString(), title: 'Custom', condition: '', weight: 0, isChecked: true, isCustom: true });
-                             handleChange('dynamicWeights', newWeights);
-                           }}
-                           className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 border border-slate-200/60 text-slate-700 rounded-full text-sm font-medium hover:bg-slate-100/80 transition-all active:scale-95"
-                        >
-                           <Plus className="w-4 h-4" /> Add Adjustment
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {(formData.dynamicWeights || []).map((wItem: any, index: number) => {
-                          const isChecked = wItem.isChecked;
-                          
-                          if (!wItem.isCustom) {
-                            return (
-                              <label 
-                                key={wItem.id} 
-                                className={`group flex items-center justify-between p-5 rounded-[24px] border cursor-pointer transition-all duration-300 ${
-                                  isChecked 
-                                  ? 'border-orange-500/30 bg-orange-50/20 shadow-sm' 
-                                  : 'border-slate-200/60 bg-white hover:border-slate-300 hover:bg-slate-50/50'
-                                }`}
-                              >
-                                <div className="flex items-center gap-5 flex-1">
-                                   <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${isChecked ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-200 text-slate-400 group-hover:bg-slate-300'}`}>
-                                      <Check className={`w-3.5 h-3.5 ${isChecked ? 'opacity-100' : 'opacity-0'}`} />
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isChecked} 
-                                        onChange={(e) => {
-                                          const newW = [...formData.dynamicWeights];
-                                          newW[index].isChecked = e.target.checked;
-                                          handleChange('dynamicWeights', newW);
-                                        }}
-                                        className="hidden" 
-                                      />
-                                   </div>
-                                   <div>
-                                     <p className={`text-base font-medium leading-tight mb-1 pr-6 ${isChecked ? 'text-slate-900' : 'text-slate-700'}`}>{wItem.condition}</p>
-                                     {wItem.title && <p className="text-sm text-slate-500 font-normal">{wItem.title}</p>}
-                                   </div>
-                                </div>
-                                <div className={`shrink-0 flex items-center justify-center min-w-[70px] py-1.5 px-3 rounded-full border font-bold text-sm shadow-sm ${
-                                  isChecked 
-                                  ? (wItem.weight > 0 ? 'bg-rose-500 border-rose-600 text-white' : wItem.weight < 0 ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-slate-800 border-slate-900 text-white')
-                                  : 'bg-white border-slate-200 text-slate-400'
-                                }`}>
-                                  {wItem.weight > 0 ? '+' : ''}{wItem.weight}
-                                  <span className="ml-1 text-[10px] font-semibold opacity-80">kg</span>
-                                </div>
-                              </label>
-                            );
-                          }
-                          
-                          return (
-                            <div key={wItem.id} className="col-span-1 lg:col-span-2 flex flex-col md:flex-row gap-6 items-center p-6 rounded-[24px] border border-slate-200 bg-white shadow-sm shadow-slate-100/50">
-                              <label className={`w-6 h-6 rounded-md flex items-center justify-center cursor-pointer transition-colors shrink-0 self-start md:self-center mt-2 md:mt-0 ${isChecked ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-200 text-slate-400'}`}>
-                                <Check className={`w-3.5 h-3.5 ${isChecked ? 'opacity-100' : 'opacity-0'}`} />
-                                <input 
-                                  type="checkbox" 
-                                  checked={isChecked} 
-                                  onChange={(e) => {
-                                    const newW = [...formData.dynamicWeights];
-                                    newW[index].isChecked = e.target.checked;
-                                    handleChange('dynamicWeights', newW);
-                                  }}
-                                  className="hidden"
-                                />
-                              </label>
-                              <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-slate-600">Adjustment Name</label>
-                                  <input type="text" value={wItem.title} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].title = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 focus:ring-0 focus:border-orange-500 outline-none transition-colors placeholder:text-slate-300 text-base" placeholder="e.g. Success Ballast" />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-slate-600">Description</label>
-                                  <input type="text" value={wItem.condition} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].condition = e.target.value; handleChange('dynamicWeights', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 focus:ring-0 focus:border-orange-500 outline-none transition-colors placeholder:text-slate-300 text-base" placeholder="Reason for adjustment" />
-                                </div>
+                            ) : (
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-slate-800">{opt.condition || opt.title}</p>
+                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">{opt.title}</p>
                               </div>
-                              <div className="flex flex-row items-center gap-6 shrink-0 mt-4 md:mt-0 w-full md:w-auto">
-                                <div className="space-y-2 flex-1 md:w-28 text-right md:text-left">
-                                  <label className="text-sm font-medium text-slate-600 w-full inline-block text-left">Value</label>
-                                  <div className="relative flex items-center w-full">
-                                    <input type="number" value={wItem.weight} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].weight = Number(e.target.value); handleChange('dynamicWeights', newW); }} className="w-full px-0 py-2 bg-transparent border-0 border-b border-slate-200 text-slate-900 text-xl focus:ring-0 focus:border-orange-500 outline-none transition-colors font-medium text-left md:text-center pl-1 pr-8" placeholder="0" />
-                                    <span className="absolute right-0 text-slate-400 text-base pointer-events-none pb-0">kg</span>
-                                  </div>
-                                </div>
-                                <button onClick={() => { const newW = formData.dynamicWeights.filter((_: any, i: number) => i !== index); handleChange('dynamicWeights', newW); }} className="p-3 md:mt-6 text-slate-400 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors">
-                                  <Trash2 className="w-5 h-5" />
-                                </button>
+                            )}
+                          </label>
+                          <div className="flex items-center gap-6 ml-4">
+                            {opt.isCustom ? (
+                              <div className="flex items-center gap-2">
+                                <input type="number" value={opt.weight} onChange={e => {
+                                    const val = e.target.value;
+                                    const newW = [...formData.baseWeightOptions]; 
+                                    newW[index].weight = Number(val); 
+                                    handleChange('baseWeightOptions', newW);
+                                    if (formData.baseWeight === opt.weight.toString()) handleChange('baseWeight', val);
+                                }} className="w-20 px-2 py-1 bg-white border border-slate-200 rounded text-sm text-right outline-none focus:border-slate-400" />
+                                <span className="text-xs text-slate-400">kg</span>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      
-                      {(!formData.dynamicWeights || formData.dynamicWeights.length === 0) && (
-                        <div className="text-center py-12 bg-slate-50/50 border border-slate-200/60 rounded-[32px]">
-                          <p className="text-base text-slate-600 font-medium tracking-tight">No active adjustments</p>
-                        </div>
-                      )}
-                    </section>
-
-                    {/* Custom Tables Mapping */}
-                    {formData.customTablesData && formData.customTablesData.length > 0 && formData.customTablesData.map((table: any) => (
-                      <section key={table.id}>
-                        <div className="mb-6">
-                            <h3 className="text-xl font-medium text-slate-900">{table.title}</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {table.rows.map((row: any) => {
-                            const condition = table.columns.map((c: string) => row.values[c] || '-').join(' | ');
-                            let labelAdd = '';
-                            if (table.hasCommitteeWeight && row.committeeWeight) labelAdd = ` (+${row.committeeWeight}kg Vary Weight)`;
-
-                            const isChecked = table.selectionType === 'single' 
-                                ? formData.customTablesSelections?.[table.id] === row.id 
-                                : formData.customTablesSelections?.[table.id]?.includes(row.id);
-                                
-                            return (
-                              <label 
-                                key={row.id} 
-                                className={`group flex flex-col p-6 rounded-[24px] border cursor-pointer transition-all duration-300 ${
-                                  isChecked 
-                                  ? 'border-orange-500/30 bg-orange-50/20 shadow-sm' 
-                                  : 'border-slate-200/60 bg-white hover:border-slate-300 hover:bg-slate-50/50'
-                                }`}
-                              >
-                                <div className="flex justify-between items-start mb-5">
-                                   <div className={`flex items-center justify-center w-6 h-6 border ${table.selectionType === 'single' ? 'rounded-full' : 'rounded-md'} transition-colors ${isChecked ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-white group-hover:border-slate-400'}`}>
-                                     {isChecked && (
-                                       table.selectionType === 'single' 
-                                         ? <div className="w-2.5 h-2.5 bg-white rounded-full" />
-                                         : <Check className="w-4 h-4 text-white" />
-                                     )}
-                                   </div>
-                                   <input 
-                                     type={table.selectionType === 'single' ? 'radio' : 'checkbox'} 
-                                     checked={isChecked || false}
-                                     onChange={(e) => {
-                                       const newSelections = { ...(formData.customTablesSelections || {}) };
-                                       if (table.selectionType === 'single') {
-                                         newSelections[table.id] = row.id;
-                                       } else {
-                                         let currentArr = newSelections[table.id] || [];
-                                         if (!Array.isArray(currentArr)) currentArr = [currentArr as string];
-                                         if (e.target.checked) {
-                                           newSelections[table.id] = [...currentArr, row.id];
-                                         } else {
-                                           newSelections[table.id] = currentArr.filter((rId: string) => rId !== row.id);
-                                         }
-                                       }
-                                       handleChange('customTablesSelections', newSelections);
-                                     }}
-                                     className="hidden"
-                                   />
-                                   {table.hasWeight && (
-                                     <div className={`px-3 py-1 rounded-full text-xs font-semibold ${isChecked ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                                       {row.weight} kg
-                                     </div>
-                                   )}
-                                </div>
-                                <div className="space-y-1">
-                                   <p className={`text-base font-medium transition-colors ${isChecked ? 'text-slate-900' : 'text-slate-700'}`}>{condition}</p>
-                                   {labelAdd && <p className="text-xs text-orange-500 font-medium">{labelAdd}</p>}
-                                </div>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </section>
-                    ))}
-
-                    <div className="mt-8 pt-8 border-t border-slate-200">
-                      <div className="bg-slate-50 rounded-[32px] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 border border-slate-200/60">
-                        <div>
-                          <h4 className="text-2xl font-medium text-slate-900 mb-2">Final Weight</h4>
-                          <p className="text-base text-slate-500 max-w-md">Total calculated weight including all selected base weights, dynamic adjustments, and custom table modifiers.</p>
-                        </div>
-                        
-                        <div className="shrink-0 bg-white py-6 px-10 rounded-[28px] border border-slate-200 shadow-sm shadow-slate-100">
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-6xl font-medium tracking-tight text-slate-900">
-                              {calculateTotalWeight()}
-                            </span>
-                            <span className="text-xl font-medium text-slate-400">kg</span>
+                            ) : (
+                              <span className="text-sm font-bold text-slate-900 w-16 text-right">{opt.weight} kg</span>
+                            )}
+                            {opt.isCustom && (
+                              <button onClick={() => { 
+                                const newW = formData.baseWeightOptions.filter((_: any, i: number) => i !== index); 
+                                handleChange('baseWeightOptions', newW); 
+                                if (formData.baseWeight === opt.weight.toString()) handleChange('baseWeight', '');
+                              }} className="text-slate-300 hover:text-rose-500">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
-                      </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Dynamic Weights Table */}
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Adjustments & Penalties</span>
+                      <button 
+                        onClick={() => {
+                          const newWeights = [...(formData.dynamicWeights || [])];
+                          newWeights.push({ id: Date.now().toString(), title: 'Custom', condition: '', weight: 0, isChecked: true, isCustom: true });
+                          handleChange('dynamicWeights', newWeights);
+                        }}
+                        className="text-[10px] font-bold text-slate-900 uppercase tracking-widest hover:underline"
+                      >
+                        + Add Adjustment
+                      </button>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {(formData.dynamicWeights || []).map((wItem: any, index: number) => (
+                        <div key={wItem.id} className={`flex items-center px-6 py-3 hover:bg-slate-50 transition-all ${wItem.isChecked ? 'bg-slate-50/30' : ''}`}>
+                          <label className="flex items-center gap-4 flex-1 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={wItem.isChecked} 
+                              onChange={(e) => {
+                                const newW = [...formData.dynamicWeights];
+                                newW[index].isChecked = e.target.checked;
+                                handleChange('dynamicWeights', newW);
+                              }}
+                              className="w-4 h-4 border-slate-300 rounded text-slate-900 focus:ring-slate-900"
+                            />
+                            {wItem.isCustom ? (
+                              <div className="flex-1 grid grid-cols-2 gap-4">
+                                <input type="text" value={wItem.title} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].title = e.target.value; handleChange('dynamicWeights', newW); }} className="px-3 py-1 bg-white border border-slate-200 rounded text-sm outline-none focus:border-slate-400" placeholder="Adjustment Title" />
+                                <input type="text" value={wItem.condition} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].condition = e.target.value; handleChange('dynamicWeights', newW); }} className="px-3 py-1 bg-white border border-slate-200 rounded text-sm outline-none focus:border-slate-400" placeholder="Description" />
+                              </div>
+                            ) : (
+                              <div className="flex-1">
+                                <p className="text-sm text-slate-700">{wItem.condition}</p>
+                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">{wItem.title}</p>
+                              </div>
+                            )}
+                          </label>
+                          <div className="flex items-center gap-6 ml-4">
+                            {wItem.isCustom ? (
+                              <div className="flex items-center gap-2">
+                                <input type="number" value={wItem.weight} onChange={e => { const newW = [...formData.dynamicWeights]; newW[index].weight = Number(e.target.value); handleChange('dynamicWeights', newW); }} className="w-20 px-2 py-1 bg-white border border-slate-200 rounded text-sm text-right outline-none focus:border-slate-400" />
+                                <span className="text-xs text-slate-400">kg</span>
+                              </div>
+                            ) : (
+                              <span className={`text-sm font-bold w-16 text-right ${wItem.weight > 0 ? 'text-slate-900' : 'text-slate-500'}`}>
+                                {wItem.weight > 0 ? '+' : ''}{wItem.weight} kg
+                              </span>
+                            )}
+                            {wItem.isCustom && (
+                              <button onClick={() => { const newW = formData.dynamicWeights.filter((_: any, i: number) => i !== index); handleChange('dynamicWeights', newW); }} className="text-slate-300 hover:text-rose-500">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Summary Row */}
+                  <div className="bg-slate-900 text-white rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Final Calculated Weight</h4>
+                      <p className="text-[10px] text-slate-500">Includes base weights and all technical adjustments.</p>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-bold">{calculateTotalWeight()}</span>
+                      <span className="text-lg font-medium text-slate-500">kg</span>
                     </div>
                   </div>
                 </motion.div>
@@ -2427,58 +2495,150 @@ export default function InspectionTab() {
 
               {currentStep === 5 && (
                 <motion.div
-                  key="step4"
+                  key="stepSealInventory"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="space-y-8"
+                  className="space-y-10"
                 >
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Seal / ซีล</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {renderInput('Engine Seal Number / หมายเลขซีลเครื่องยนต์', 'engineSealNumber')}
-                      {renderInput('Gear Seal Number / หมายเลขซีลเกียร์', 'gearSealNumber')}
-                      {renderInput('Tire Mark Amount / จำนวนการมาร์คยาง', 'tireMarkAmountStep3')}
-                      {renderCheckbox('Weight Added After Race 2 / น้ำหนักที่ถ่วงเพิ่มหลังเรซ 2', 'weightAddedAfterRace2')}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <h3 className="text-2xl font-light text-slate-900 tracking-tight">Component Inventory / การจัดการอะไหล่และซีล</h3>
+                      <p className="text-sm text-slate-500 mt-1">Manage active and spare engines/gearboxes with associated seals.</p>
                     </div>
+                    <button 
+                      onClick={() => setShowAddComponentModal(true)}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-md active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" /> Add Component
+                    </button>
                   </div>
 
-                  <div className="pt-6 border-t border-slate-100">
-                    <h3 className="text-sm font-medium text-slate-900 mb-4">Change Engine Seal / เปลี่ยนซีลเครื่องยนต์</h3>
-                    <div className="flex gap-6 mb-6">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input 
-                          type="radio" 
-                          name="changeSeal" 
-                          value="Not Change Seal"
-                          checked={formData.changeSeal === 'Not Change Seal'}
-                          onChange={(e) => handleChange('changeSeal', e.target.value)}
-                          className="text-orange-500 focus:ring-orange-500"
-                        />
-                        <span className="text-sm text-slate-700">Not Change Seal / ไม่เปลี่ยนซีล</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input 
-                          type="radio" 
-                          name="changeSeal" 
-                          value="Change Seal"
-                          checked={formData.changeSeal === 'Change Seal'}
-                          onChange={(e) => handleChange('changeSeal', e.target.value)}
-                          className="text-orange-500 focus:ring-orange-500"
-                        />
-                        <span className="text-sm text-slate-700">Change Seal / เปลี่ยนซีล</span>
-                      </label>
-                    </div>
-
-                    {formData.changeSeal === 'Change Seal' && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {renderInput('Current Engine Seal Number / หมายเลขซีลเครื่องยนต์เดิม', 'currentEngineSealNumber')}
-                        {renderInput('New Engine Seal Number / หมายเลขซีลเครื่องยนต์ใหม่', 'newEngineSealNumber')}
-                        <div className="md:col-span-2">
-                           {renderInput('Reason for changing seal / เหตุผลที่เปลี่ยนซีล', 'reasonForChangingSeal')}
-                        </div>
+                  <div className="space-y-12">
+                    {/* Active Components */}
+                    <section>
+                      <div className="flex items-center gap-3 mb-6">
+                         <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-200">
+                           <CheckCircle2 className="w-4 h-4 text-slate-900" />
+                         </div>
+                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Components</h4>
                       </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {(formData.components || []).filter((c: ComponentItem) => c.status === 'ACTIVE').map((comp: ComponentItem) => (
+                          <div key={comp.id} className="relative group bg-white border border-slate-200 rounded-[20px] p-6 shadow-sm overflow-hidden hover:border-slate-300 transition-all">
+                             <div className="relative z-10">
+                               <div className="flex justify-between items-start mb-4">
+                                 <div>
+                                   <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-black rounded uppercase mb-1 inline-block">{comp.type}</span>
+                                   <h5 className="text-xl font-bold text-slate-900">{comp.displayName || comp.id}</h5>
+                                 </div>
+                                 {comp.isOffsite && (
+                                   <span className="px-3 py-1 bg-slate-50 border border-slate-100 text-slate-500 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
+                                     <Check className="w-3 h-3" /> Offsite Inspected
+                                   </span>
+                                 )}
+                               </div>
+                               <div className="space-y-3">
+                                 <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Seal Numbers</p>
+                                 <div className="flex flex-wrap gap-2">
+                                   {comp.sealNumbers.map((s, idx) => (
+                                     <span key={idx} className="bg-white border border-slate-100 px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 shadow-sm">
+                                       {s}
+                                     </span>
+                                   ))}
+                                 </div>
+                               </div>
+                             </div>
+                          </div>
+                        ))}
+                        {(formData.components || []).filter((c: ComponentItem) => c.status === 'ACTIVE').length === 0 && (
+                          <div className="col-span-full py-10 border border-dashed border-slate-200 rounded-[20px] flex flex-col items-center justify-center text-slate-400 font-light italic">
+                            No active components assigned.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    {/* Spare Components */}
+                    <section>
+                      <div className="flex items-center gap-3 mb-6">
+                         <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-200">
+                           <RefreshCw className="w-4 h-4 text-slate-900" />
+                         </div>
+                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Spare Components</h4>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {(formData.components || []).filter((c: ComponentItem) => c.status === 'SPARE').map((comp: ComponentItem) => (
+                          <div key={comp.id} className="relative group bg-white border border-slate-200 rounded-[16px] p-5 hover:border-slate-400 transition-all shadow-sm">
+                             <div className="flex justify-between items-start mb-4">
+                               <div>
+                                 <span className="px-2 py-0.5 bg-slate-50 text-slate-400 text-[9px] font-bold rounded uppercase mb-1 inline-block">{comp.type}</span>
+                                 <h5 className="text-lg font-bold text-slate-800">{comp.displayName || comp.id}</h5>
+                               </div>
+                               <button 
+                                 onClick={() => {
+                                   const currentActive = formData.components.find((c: ComponentItem) => c.type === comp.type && c.status === 'ACTIVE');
+                                   if (confirm(`Swap ${comp.type}? This will Retire ${currentActive?.displayName || 'current'} and Activate ${comp.displayName}.`)) {
+                                     handleComponentSwap(currentActive, comp);
+                                   }
+                                 }}
+                                 className="px-3 py-1.5 bg-slate-100 border border-slate-200 text-slate-600 text-[9px] font-black rounded uppercase tracking-wider hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all flex items-center gap-1"
+                               >
+                                 <Zap className="w-3 h-3" /> Set Active
+                               </button>
+                             </div>
+                             <div className="space-y-2">
+                               <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest leading-none">Seals</p>
+                               <div className="flex flex-wrap gap-1.5">
+                                 {comp.sealNumbers.map((s, idx) => (
+                                   <span key={idx} className="bg-slate-50 border border-slate-100 px-2 py-1 rounded text-xs font-medium text-slate-500">
+                                     {s}
+                                   </span>
+                                 ))}
+                               </div>
+                             </div>
+                             <button 
+                               onClick={() => {
+                                 handleChange('components', formData.components.filter((c: ComponentItem) => c.id !== comp.id));
+                               }}
+                               className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-rose-500 transition-all"
+                             >
+                               <Trash2 className="w-3.5 h-3.5" />
+                             </button>
+                          </div>
+                        ))}
+                        {(formData.components || []).filter((c: ComponentItem) => c.status === 'SPARE').length === 0 && (
+                          <div className="col-span-full py-8 border border-dashed border-slate-200 rounded-[16px] flex items-center justify-center text-slate-300 text-sm font-light">
+                            No spare components available.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    {/* Retired Components (Optional/Foldable if needed, but let's just list briefly) */}
+                    {(formData.components || []).filter((c: ComponentItem) => c.status === 'RETIRED').length > 0 && (
+                      <section className="opacity-60">
+                        <div className="flex items-center gap-3 mb-6">
+                           <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center border border-slate-200">
+                             <Trash2 className="w-4 h-4 text-slate-500" />
+                           </div>
+                           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Retired History</h4>
+                        </div>
+                        <div className="flex flex-wrap gap-4">
+                          {(formData.components || []).filter((c: ComponentItem) => c.status === 'RETIRED').map((comp: ComponentItem) => (
+                            <div key={comp.id} className="bg-white border border-slate-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                               <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
+                                 {comp.type === 'Engine' ? <Zap className="w-4 h-4 text-slate-300" /> : <Settings2 className="w-4 h-4 text-slate-300" />}
+                               </div>
+                               <div>
+                                 <p className="text-[10px] font-bold text-slate-300 uppercase leading-none mb-1">{comp.type}</p>
+                                 <p className="text-sm font-medium text-slate-400">{comp.displayName || comp.id}</p>
+                               </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
                     )}
                   </div>
                 </motion.div>
@@ -2494,38 +2654,196 @@ export default function InspectionTab() {
                   className="space-y-8"
                 >
                   <div>
-                    <h3 className="text-lg font-medium text-slate-900 mb-6">{isCompetitor ? 'Review Your Information' : 'Final Check & Decision'}</h3>
-                    <div className="space-y-6">
-                      {/* Show decision buttons if official */}
+                    <h3 className="text-2xl font-light text-slate-900 mb-8 pb-4 border-b border-slate-100">{isCompetitor ? 'Full Inspection Review' : 'Final Verification & Decision'}</h3>
+                    <div className="space-y-10">
+                      {/* Section 1: Driver & Event */}
+                      <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">1. Driver & Event Information</h4>
+                        </div>
+                        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-8 text-sm">
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Date</span> <p className="font-medium text-slate-900">{formData.inspectionDate || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Stadium</span> <p className="font-medium text-slate-900">{formData.stadium || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Series</span> <p className="font-medium text-slate-900">{formData.series || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Grades/Class</span> <p className="font-medium text-slate-900">{formData.grades || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Car Number</span> <p className="font-medium text-slate-900">{formData.carNumber || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Racer</span> <p className="font-medium text-slate-900">{formData.racerName || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Team</span> <p className="font-medium text-slate-900">{formData.teamName || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Manager</span> <p className="font-medium text-slate-900">{formData.teamManagerName || '-'}</p></div>
+                        </div>
+                      </section>
+
+                      {/* Section 2: Technical Specifications */}
+                      <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">2. Technical Specifications</h4>
+                        </div>
+                        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-8 text-sm">
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Manufacturer</span> <p className="font-medium text-slate-900">{formData.carManufacturer || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Model</span> <p className="font-medium text-slate-900">{formData.model || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Displacement</span> <p className="font-medium text-slate-900">{formData.engineDisplacement ? `${formData.engineDisplacement} CC` : '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Engine Code</span> <p className="font-medium text-slate-900">{formData.engineCode || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Transmission</span> <p className="font-medium text-slate-900">{formData.transmission || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Drivetrain</span> <p className="font-medium text-slate-900">{formData.drivetrain || '-'}</p></div>
+                          <div><span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Gear Shift</span> <p className="font-medium text-slate-900">{formData.gearShiftPattern || '-'}</p></div>
+                        </div>
+                      </section>
+
+                      {/* Section 3: Tires & Stickers */}
+                      <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">3. Tires & Compliance</h4>
+                        </div>
+                        <div className="p-6 space-y-6">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {Object.entries(formData.tireMarkAmount || {}).map(([brand, amount]) => (
+                              amount ? (
+                                <div key={brand} className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-center">
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase block">{brand}</span>
+                                  <p className="text-lg font-bold text-slate-900">{amount} marks</p>
+                                </div>
+                              ) : null
+                            ))}
+                          </div>
+                          <div className="flex flex-wrap gap-3">
+                            <div className={`px-4 py-2 rounded-full border text-xs font-bold uppercase tracking-wider ${formData.stickers?.haveAllStickers ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-300'}`}>
+                              All Stickers Placed
+                            </div>
+                            <div className={`px-4 py-2 rounded-full border text-xs font-bold uppercase tracking-wider ${formData.stickers?.stillNeedSticker ? 'bg-rose-50 border-rose-200 text-rose-500' : 'bg-white border-slate-200 text-slate-300'}`}>
+                              Requires Replacement
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      {/* Section 4: Weight & BOP */}
+                      <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">4. Weight & Balance (BOP)</h4>
+                        </div>
+                        <div className="p-6 space-y-4">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-500 font-medium italic">Selected Base Minimum Weight</span>
+                            <span className="font-bold text-slate-900">{formData.baseWeight || 0} kg</span>
+                          </div>
+                          <div className="space-y-2">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applied Adjustments</p>
+                             {(formData.dynamicWeights || []).filter((w: any) => w.isChecked).map((w: any) => (
+                               <div key={w.id} className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                 <span className="text-slate-600">{w.condition || w.title}</span>
+                                 <span className="font-bold text-slate-900">{w.weight > 0 ? '+' : ''}{w.weight} kg</span>
+                                </div>
+                             ))}
+                             {(formData.dynamicWeights || []).filter((w: any) => w.isChecked).length === 0 && <p className="text-xs text-slate-300 italic">No adjustments applied</p>}
+                          </div>
+                          <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+                            <span className="text-sm font-bold text-slate-900">Total Calculated Inspection Weight</span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl font-black text-slate-900">{calculateTotalWeight()}</span>
+                              <span className="text-sm font-medium text-slate-400">kg</span>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      {/* Section 5: Safety Checks (Official Only) */}
                       {!isCompetitor && (
-                        <div className="bg-orange-50 border border-orange-100 p-8 rounded-3xl mb-8">
-                          <h4 className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-6 text-center">Inspection Decision</h4>
-                          <div className="grid grid-cols-2 gap-4">
+                        <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                          <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">5. Safety & Equipment Inspection</h4>
+                          </div>
+                          <div className="p-6 space-y-6">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                               {Object.entries(formData.carLight || {}).map(([key, val]) => (
+                                 <div key={key} className={`p-2 rounded border text-[10px] font-bold uppercase text-center ${val ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-300 border-slate-100'}`}>
+                                   {key.replace(/([A-Z])/g, ' $1')}
+                                 </div>
+                               ))}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {Object.entries(formData.carEquipment || {}).map(([key, equip]: [string, any]) => (
+                                <div key={key} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                  <span className="text-xs font-bold text-slate-500 uppercase">{key.replace(/([A-Z])/g, ' $1')}</span>
+                                  <div className="flex gap-2">
+                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${equip.installed ? 'bg-slate-900 text-white' : 'bg-white text-slate-200'}`}>INST</span>
+                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${equip.sticker ? 'bg-slate-900 text-white' : 'bg-white text-slate-200'}`}>STIC</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </section>
+                      )}
+
+                      {/* Section 6: Component Inventory */}
+                      <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">6. Component Inventory (Active)</h4>
+                        </div>
+                        <div className="p-6 space-y-4">
+                          {(formData.components || []).filter((c: ComponentItem) => c.status === 'ACTIVE').map((comp: ComponentItem) => (
+                            <div key={comp.id} className="flex justify-between items-start text-sm border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                               <div>
+                                 <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-widest">{comp.type}</span>
+                                 <h6 className="font-bold text-slate-900 text-base">{comp.displayName || comp.id}</h6>
+                                 <div className="flex flex-wrap gap-1.5 mt-2">
+                                   {comp.sealNumbers.map((s, i) => <span key={i} className="px-2 py-1 bg-slate-50 rounded border border-slate-200 text-[10px] text-slate-600 font-medium">{s}</span>)}
+                                 </div>
+                               </div>
+                               {comp.isOffsite && <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-full text-[8px] font-bold border border-slate-200 shadow-sm">OFFSITE ASSIGNED</span>}
+                            </div>
+                          ))}
+                          {(formData.components || []).filter((c: ComponentItem) => c.status === 'ACTIVE').length === 0 && <p className="text-sm text-slate-300 italic">No active components registered</p>}
+                        </div>
+                      </section>
+
+                      {/* Section 7: Photos & Remarks */}
+                      <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">7. Supplementary Actions</h4>
+                        </div>
+                        <div className="p-6 space-y-4">
+                           <div className="space-y-1">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Inspector Remarks</p>
+                             <p className="text-sm font-medium text-slate-700 whitespace-pre-wrap">{formData.remark || '-'}</p>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                             {Object.entries(uploadedFiles).map(([label, files]) => (
+                               <div key={label} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-2">{label}</p>
+                                 <div className="text-[10px] text-slate-900 font-bold">{files.length} Files Attached</div>
+                               </div>
+                             ))}
+                           </div>
+                        </div>
+                      </section>
+
+                      {/* Decision Panel (Official only or during history view) */}
+                      {!isCompetitor && (
+                        <div className="bg-slate-900 p-8 rounded-3xl text-white shadow-xl">
+                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-8 text-center italic">Official Inspection Final Verdict</h4>
+                          <div className="grid grid-cols-2 gap-6">
                             <button
                               onClick={() => handleChange('status', 'Pass')}
-                              className={`flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all ${
+                              className={`flex items-center justify-center gap-4 p-5 rounded-2xl border transition-all ${
                                 formData.status === 'Pass' 
-                                  ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
-                                  : 'bg-white border-slate-200 text-slate-400 hover:border-emerald-200 hover:bg-emerald-50'
+                                  ? 'bg-white text-slate-900 border-white shadow-lg' 
+                                  : 'bg-transparent border-slate-700 text-slate-500 hover:border-slate-500'
                               }`}
                             >
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${formData.status === 'Pass' ? 'bg-white/20' : 'bg-slate-50 text-slate-300'}`}>
-                                <CheckCircle2 className="w-6 h-6" />
-                              </div>
-                              <span className="font-bold text-sm">Pass</span>
+                              <CheckCircle2 className="w-5 h-5" />
+                              <span className="font-black uppercase tracking-widest text-xs">Verify Pass</span>
                             </button>
                             <button
                               onClick={() => handleChange('status', 'Not Pass')}
-                              className={`flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all ${
+                              className={`flex items-center justify-center gap-4 p-5 rounded-2xl border transition-all ${
                                 formData.status === 'Not Pass' 
-                                  ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/30' 
-                                  : 'bg-white border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50'
+                                  ? 'bg-rose-500 text-white border-rose-500 shadow-lg' 
+                                  : 'bg-transparent border-slate-700 text-slate-500 hover:border-slate-500'
                               }`}
                             >
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${formData.status === 'Not Pass' ? 'bg-white/20' : 'bg-slate-50 text-slate-300'}`}>
-                                <X className="w-6 h-6" />
-                              </div>
-                              <span className="font-bold text-sm">Not Pass</span>
+                              <X className="w-5 h-5" />
+                              <span className="font-black uppercase tracking-widest text-xs">Reject Form</span>
                             </button>
                           </div>
                           
@@ -2533,61 +2851,19 @@ export default function InspectionTab() {
                             <motion.div 
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
-                              className="mt-6 space-y-2"
+                              className="mt-8 space-y-3"
                             >
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reasons for not passing</label>
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center block">Deficiency Notice Details</label>
                               <textarea 
                                 value={formData.notPassReasons || ''}
                                 onChange={(e) => handleChange('notPassReasons', e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-light text-slate-900 focus:outline-none focus:ring-4 focus:ring-rose-100 focus:border-rose-300 transition-all min-h-[100px]"
-                                placeholder="E.g. Safety harness expired, Seal missing..."
+                                className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-6 py-4 text-sm font-medium text-white focus:outline-none focus:border-rose-500 transition-all min-h-[120px] placeholder:text-slate-600"
+                                placeholder="State exact reasons for rejection (e.g. Safety harness expired)..."
                               />
                             </motion.div>
                           )}
                         </div>
                       )}
-
-                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Driver & Series Info</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                          <div><span className="text-slate-500 block text-xs">Inspection Date</span> {formData.inspectionDate || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Stadium</span> {formData.stadium || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Series</span> {formData.series || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Grades</span> {formData.grades || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Car Number</span> {formData.carNumber || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Team Name</span> {formData.teamName || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Racer Name</span> {formData.racerName || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Team Manager</span> {formData.teamManagerName || '-'}</div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Car Info</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                          <div><span className="text-slate-500 block text-xs">Brand</span> {formData.carManufacturer || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Model</span> {formData.model || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Engine Disp.</span> {formData.engineDisplacement || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Engine Code</span> {formData.engineCode || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Transmission</span> {formData.transmission || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Drivetrain</span> {formData.drivetrain || '-'}</div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">Seal</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                          <div><span className="text-slate-500 block text-xs">Engine Seal</span> {formData.engineSealNumber || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">Gear Seal</span> {formData.gearSealNumber || '-'}</div>
-                          <div><span className="text-slate-500 block text-xs">BOP</span> {Number(formData.baseWeight || 0) + (formData.dynamicWeights || []).reduce((acc: number, curr: { isChecked: boolean, weight: number }) => acc + (curr.isChecked ? Number(curr.weight) : 0), 0)} kg</div>
-                          <div><span className="text-slate-500 block text-xs">Change Seal</span> {formData.changeSeal || '-'}</div>
-                          {formData.changeSeal === 'Change Seal' && (
-                            <>
-                              <div><span className="text-slate-500 block text-xs">New Seal</span> {formData.newEngineSealNumber || '-'}</div>
-                              <div className="col-span-2"><span className="text-slate-500 block text-xs">Reason</span> {formData.reasonForChangingSeal || '-'}</div>
-                            </>
-                          )}
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -2646,6 +2922,7 @@ export default function InspectionTab() {
         </div>
       </motion.div>
       {renderHistorySheet()}
+      {renderAddComponentModal()}
       {renderToast()}
     </>
   );

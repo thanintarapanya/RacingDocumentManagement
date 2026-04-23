@@ -13,6 +13,7 @@ const ROLES = [
   'secretary',
   'head_scrutineer',
   'scrutineer_staff',
+  'offsite_scrutineer',
   'steward',
   'competitor'
 ];

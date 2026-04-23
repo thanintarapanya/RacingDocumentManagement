@@ -61,6 +61,7 @@ interface Report {
 
 const initialFormData = {
   stadium: '',
+  carNumber: '',
   reportSession: '',
   race: '',
   series: '',
@@ -110,7 +111,8 @@ export default function ReportTab() {
   const [viewMode, setViewMode] = useState(false);
 
   const userRole = useAppStore(state => state.userRole);
-  const canEdit = ['admin', 'president', 'head_scrutineer'].includes(userRole || '');
+  const entries = useAppStore(state => state.entries);
+  const canEdit = ['admin', 'president', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer'].includes(userRole || '');
   
   // Form Wizard States
   const [currentStep, setCurrentStep] = useState(1);
@@ -146,6 +148,18 @@ export default function ReportTab() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (formData.series && formData.carNumber) {
+      const entry = entries.find(e => e.seriesRace === formData.series && e.carNumber === formData.carNumber);
+      if (entry && entry.formData) {
+        setFormData(prev => ({
+          ...prev,
+          grades: entry.formData.grade || entry.formData.grades || entry.formData.class || entry.gradeRace || '',
+        }));
+      }
+    }
+  }, [formData.series, formData.carNumber, entries]);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -209,6 +223,7 @@ export default function ReportTab() {
   const handleEdit = (report: Report) => {
     setFormData({
       stadium: report.stadium || '',
+      carNumber: '',
       event: report.event || '',
       eventYear: report.eventYear || '',
       reportSession: report.reportSession || '',
@@ -227,6 +242,7 @@ export default function ReportTab() {
   const handleView = (report: Report) => {
     setFormData({
       stadium: report.stadium || '',
+      carNumber: '',
       event: report.event || '',
       eventYear: report.eventYear || '',
       reportSession: report.reportSession || '',
@@ -758,6 +774,10 @@ export default function ReportTab() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {renderSelect('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
+                        {renderInput('Car Number / หมายเลขรถ', 'carNumber', 'text', 'Enter car number for auto-fill')}
+                      </div>
                       {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
                       {renderSelect('Report Session / รอบการแข่งขัน', 'reportSession', ['Qualify', 'Post-Qualify', 'Post-Race', 'Special Case'])}
                       {renderInput('Race / เรซ', 'race')}
@@ -773,8 +793,9 @@ export default function ReportTab() {
                       </div>
                     </div>
                     <div className="space-y-6">
-                      {renderRadioGroup('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
-                      {renderRadioGroup('Classes / คลาส', 'grades', ['PRO', 'AM', 'GT PRO CLASS 1', 'GT PRO CLASS 2', 'Overall'])}
+                      <div className="space-y-6">
+                         {renderInput('Classes / คลาส (Auto-filled)', 'grades', 'text', 'Enter Class')}
+                      </div>
                     </div>
                   </div>
                 </motion.div>
