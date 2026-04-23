@@ -256,8 +256,8 @@ export default function RacingResultTab() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm font-bold text-slate-900">{entry.racerName}</p>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-tight">{entry.teamName}</p>
+                        <p className="text-sm font-bold text-slate-900">{entry.nameEn}</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-tight">{entry.formData?.teamName || '-'}</p>
                       </td>
                       {RACE_OPTIONS.map(raceNum => {
                          const currentRank = localRanks[carNo]?.[raceNum] || '';
