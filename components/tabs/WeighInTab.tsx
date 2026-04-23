@@ -277,89 +277,99 @@ export default function WeighInTab() {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="space-y-6 pb-12 max-w-[1200px] mx-auto"
+      className="space-y-6 pb-12 w-full max-w-[1400px] mx-auto"
     >
-      <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2 flex items-center gap-3">
-            <Scale className="w-8 h-8 text-orange-500" />
-            Weigh-in Station
-          </h1>
-          <p className="text-slate-500 font-light text-sm">Rapid weigh-in clearing for pre/post-race.</p>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-light tracking-tight text-slate-900 mb-1 flex items-center gap-2">
+              <Scale className="w-6 h-6 text-slate-600" />
+              Weight-in Station
+            </h1>
+            <p className="text-slate-500 font-light text-sm">Rapid weight-in clearing for pre/post-race.</p>
+          </div>
+          <div className="flex bg-slate-100/50 p-1 rounded-xl border border-slate-200">
+            <button 
+              onClick={() => setSelectedSession('Pre-Race')}
+              className={`px-6 py-2 rounded-lg text-sm transition-all ${selectedSession === 'Pre-Race' ? 'bg-white text-slate-900 shadow-sm font-medium' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Pre-Race
+            </button>
+            <button 
+              onClick={() => setSelectedSession('Post-Race')}
+              className={`px-6 py-2 rounded-lg text-sm transition-all ${selectedSession === 'Post-Race' ? 'bg-white text-slate-900 shadow-sm font-medium' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Post-Race
+            </button>
+          </div>
+        </div>
+
+        {/* Series Navigation Pills */}
+        <div className="relative">
+          <div className="flex overflow-x-auto hide-scrollbar gap-3 pb-4">
+            {SERIES_CATEGORIES.map(category => (
+              <button
+                key={category}
+                onClick={() => setSelectedSeries(category)}
+                className={`flex-none px-6 py-2 rounded-full text-sm font-medium transition-all ${
+                  selectedSeries === category 
+                    ? 'bg-slate-900 text-white shadow-md' 
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+          {/* Subtle scrollbar track effect at bottom */}
+          <div className="absolute bottom-1 left-0 right-0 h-1 bg-slate-100 rounded-full mx-1">
+            <div className="h-full bg-slate-300 rounded-full w-1/4"></div>
+          </div>
         </div>
 
         {/* Filters Top Bar */}
-        <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex flex-wrap gap-4 items-center w-full xl:w-auto">
             {/* Event Dropdown */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-slate-600">Event</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Event</span>
               <div className="relative">
                 <select 
                   value={selectedEvent} 
                   onChange={(e) => setSelectedEvent(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl py-2 pl-4 pr-10 text-sm font-semibold focus:outline-none focus:border-orange-500 appearance-none"
+                  className="bg-white border border-slate-200 rounded-lg py-1.5 pl-3 pr-8 text-sm focus:outline-none focus:border-slate-400 appearance-none text-slate-700"
                 >
                   {EVENT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
-                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
 
             {/* Race Dropdown */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-slate-600">Race</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Race</span>
               <div className="relative">
                 <select 
                   value={selectedRace} 
                   onChange={(e) => setSelectedRace(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl py-2 pl-4 pr-10 text-sm font-semibold focus:outline-none focus:border-orange-500 appearance-none"
+                  className="bg-white border border-slate-200 rounded-lg py-1.5 pl-3 pr-8 text-sm focus:outline-none focus:border-slate-400 appearance-none text-slate-700"
                 >
                   {RACE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
-                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-            </div>
-
-            {/* Session Radio */}
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-              <button 
-                onClick={() => setSelectedSession('Pre-Race')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedSession === 'Pre-Race' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Pre-Race
-              </button>
-              <button 
-                onClick={() => setSelectedSession('Post-Race')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedSession === 'Post-Race' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Post-Race
-              </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto">
-            <div className="relative">
-              <select
-                value={selectedSeries}
-                onChange={(e) => setSelectedSeries(e.target.value)}
-                className="bg-white border border-slate-200 rounded-full py-2 pl-5 pr-10 text-sm font-light focus:outline-none focus:border-orange-500 appearance-none"
-              >
-                {SERIES_CATEGORIES.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-
-            <div className="relative flex-1 min-w-[150px]">
+          <div className="flex items-center w-full xl:w-80">
+            <div className="relative w-full">
               <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Car No..." 
+                placeholder="Search car number..." 
                 value={searchCar}
                 onChange={(e) => setSearchCar(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-full py-2 pl-11 pr-5 text-sm font-bold focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-50 transition-all placeholder:font-light"
+                className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-11 pr-4 text-sm focus:outline-none focus:border-slate-400 transition-all placeholder:font-light text-slate-700"
               />
             </div>
           </div>
@@ -367,21 +377,21 @@ export default function WeighInTab() {
       </div>
 
       {/* Main Table */}
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-4 sm:p-6">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[900px] text-xs">
+          <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
-                <th className="px-6 py-4 w-24"># Car</th>
-                <th className="px-6 py-4">Competitor / Category</th>
-                <th className="px-6 py-4 text-center">Equipment Seals</th>
-                <th className="px-6 py-4 text-center w-32">Req. (kg)</th>
-                <th className="px-6 py-4 text-center w-40">Actual (kg)</th>
-                <th className="px-6 py-4 text-center w-56">Validation</th>
-                <th className="px-6 py-4 text-center w-16">Log</th>
+              <tr className="border-b border-slate-100">
+                <th className="font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap pb-4 px-4 w-20">CAR NO.</th>
+                <th className="font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap pb-4 px-4 auto">COMPETITOR / CATEGORY</th>
+                <th className="font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap pb-4 px-4 text-center">EQUIPMENT SEALS</th>
+                <th className="font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap pb-4 px-4 text-center w-28">REQ. WEIGHT</th>
+                <th className="font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap pb-4 px-4 text-center w-36">ACTUAL WEIGHT</th>
+                <th className="font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap pb-4 px-4 text-center w-48">VALIDATION</th>
+                <th className="font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap pb-4 px-4 text-center w-16">LOG</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-50">
               <AnimatePresence>
                 {tableData.map((row) => {
                   const isSaved = row.status !== 'PENDING';
@@ -394,70 +404,73 @@ export default function WeighInTab() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className={`hover:bg-slate-50/50 transition-colors ${isSaved ? (row.status === 'PASSED' ? 'bg-emerald-50/10' : 'bg-rose-50/10') : ''}`}
+                      className="group hover:bg-slate-50/30 transition-colors relative"
                     >
-                      <td className="px-6 py-4">
-                        <span className="text-xl font-black text-slate-900 leading-none">{row.carNumber}</span>
+                      {/* Left border indicator for status */}
+                      <td className="absolute left-0 top-0 bottom-0 w-1">
+                        <div className={`w-full h-full ${isSaved ? (row.status === 'PASSED' ? 'bg-emerald-400' : 'bg-rose-400') : 'bg-transparent group-hover:bg-orange-400'}`}></div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-slate-800 tracking-tight">{row.racerName || 'No Data'}</span>
-                          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">{row.series}</span>
+                      <td className="py-4 px-4">
+                        <span className="text-lg font-bold text-slate-900">{row.carNumber}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm text-slate-700">{row.racerName || '-'}</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider">{row.series}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="py-4 px-4 text-center">
                         <div className="flex flex-col gap-0.5 items-center">
-                          <div className="flex gap-2">
-                             <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 uppercase tracking-tighter">ENG: {row.engineSeal || '-'}</span>
-                             <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 uppercase tracking-tighter">GR: {row.gearSeal || '-'}</span>
-                          </div>
+                          <span className="text-[10px] text-slate-500 uppercase tracking-widest">ENG: {row.engineSeal || '-'}</span>
+                          <span className="text-[10px] text-slate-500 uppercase tracking-widest">GR: {row.gearSeal || '-'}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="py-4 px-4 text-center">
                         <div className="flex flex-col items-center">
-                          <span className="text-sm font-mono font-bold text-slate-800">
+                          <span className="text-sm text-slate-700">
                             {row.requiredWeight > 0 ? row.requiredWeight.toFixed(1) : '-'}
                           </span>
                           {(row.requiredWeight > 0) && (
-                            <span className="text-[9px] text-slate-400 font-medium tracking-tighter">
-                              {row.bop.toFixed(0)} + {row.successBallast.toFixed(0)}SB
+                            <span className="text-[9px] text-slate-400 tracking-wider">
+                              ({row.bop.toFixed(0)} + {row.successBallast.toFixed(0)}SB)
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="py-4 px-4 text-center">
                         <input 
                           type="number" 
-                          className="w-24 text-center text-lg font-mono font-bold bg-slate-50 border-none rounded-lg py-2 focus:bg-white focus:ring-1 focus:ring-slate-300 outline-none transition-all text-slate-800"
+                          className={`w-full max-w-[100px] text-center text-sm font-medium bg-slate-50 border border-slate-100 rounded-lg py-1.5 focus:bg-white focus:border-slate-300 focus:outline-none transition-all text-slate-800 ${isSaved && row.status === 'FAILED' ? 'text-rose-600 bg-rose-50 border-rose-100' : ''}`}
                           placeholder="00.0"
                           value={inputValue}
                           onChange={(e) => setLocalInputs(prev => ({...prev, [row.carNumber]: e.target.value === '' ? '' : Number(e.target.value)}))}
                           disabled={userRole === 'competitor' || userRole === 'user'}
                         />
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="py-4 px-4">
                         <div className="flex items-center justify-center gap-2">
                           {(userRole !== 'competitor' && userRole !== 'user') ? (
                             <>
                               <button
                                 onClick={() => handleSaveResult(row.carNumber, row.series, row.requiredWeight, inputValue, 'PASSED')}
                                 disabled={inputValue === ''}
-                                className={`flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                className={`flex-1 flex justify-center items-center gap-1.5 py-1.5 rounded-md text-[10px] font-medium uppercase tracking-widest transition-all ${
                                   inputValue === '' ? 'text-slate-300 cursor-not-allowed'
-                                  : isSaved && row.status === 'PASSED' ? 'bg-slate-900 text-white shadow'
-                                  : 'text-emerald-600 hover:bg-emerald-50 border border-emerald-100'
+                                  : isSaved && row.status === 'PASSED' ? 'bg-emerald-500 text-white'
+                                  : 'text-emerald-600 border border-emerald-200 hover:bg-emerald-50'
                                 }`}
                               >
+
                                 {isSaved && row.status === 'PASSED' && <CheckCircle2 className="w-3.5 h-3.5" />}
                                 Pass
                               </button>
                               <button
                                 onClick={() => handleSaveResult(row.carNumber, row.series, row.requiredWeight, inputValue, 'FAILED')}
                                 disabled={inputValue === ''}
-                                className={`flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                className={`flex-1 flex justify-center items-center gap-1.5 py-1.5 rounded-md text-[10px] font-medium uppercase tracking-widest transition-all ${
                                   inputValue === '' ? 'text-slate-300 cursor-not-allowed' 
-                                  : isSaved && row.status === 'FAILED' ? 'bg-rose-500 text-white shadow'
-                                  : 'text-rose-600 hover:bg-rose-50 border border-rose-100'
+                                  : isSaved && row.status === 'FAILED' ? 'bg-rose-500 text-white'
+                                  : 'text-rose-600 border border-rose-200 hover:bg-rose-50'
                                 }`}
                               >
                                 {isSaved && row.status === 'FAILED' && <XCircle className="w-3.5 h-3.5" />}
@@ -468,23 +481,23 @@ export default function WeighInTab() {
                             <div className="flex justify-center w-full">
                                {isSaved ? (
                                   row.status === 'PASSED' ? (
-                                      <span className="text-[10px] font-bold px-3 py-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 uppercase tracking-widest flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3"/> PASSED</span>
+                                      <span className="text-[10px] font-medium px-3 py-1 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 uppercase tracking-widest flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3"/> PASSED</span>
                                   ) : (
-                                      <span className="text-[10px] font-bold px-3 py-1 bg-rose-50 text-rose-600 rounded border border-rose-100 uppercase tracking-widest flex items-center gap-1.5"><XCircle className="w-3 h-3"/> FAILED</span>
+                                      <span className="text-[10px] font-medium px-3 py-1 bg-rose-50 text-rose-600 rounded-md border border-rose-100 uppercase tracking-widest flex items-center gap-1.5"><XCircle className="w-3 h-3"/> FAILED</span>
                                   )
                                ) : (
-                                  <span className="text-[10px] font-bold px-3 py-1 bg-slate-50 text-slate-400 rounded border border-slate-100 uppercase tracking-widest">PENDING</span>
+                                  <span className="text-[10px] font-medium px-3 py-1 bg-slate-50 text-slate-400 rounded-md border border-slate-100 uppercase tracking-widest">PENDING</span>
                                )}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="py-4 px-4 text-center">
                         <button 
                           onClick={() => setLogModalCarNumber(row.carNumber)}
-                          className="p-2 text-slate-300 hover:text-slate-900 transition-colors"
+                          className="p-1.5 text-slate-300 hover:text-slate-600 transition-colors"
                         >
-                          <History className="w-3.5 h-3.5" />
+                          <History className="w-4 h-4" />
                         </button>
                       </td>
                     </motion.tr>

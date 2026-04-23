@@ -52,7 +52,7 @@ const TABS = [
   { id: 'checklist', label: 'Candidate Checklist', icon: CheckSquare, component: ChecklistTab },
   { id: 'inspection', label: 'Inspection Form', icon: Wrench, component: InspectionTab },
   { id: 'racing-result', label: 'Racing Result', icon: Trophy, component: RacingResultTab },
-  { id: 'weigh-in', label: 'Weigh-in Station', icon: Scale, component: WeighInTab },
+  { id: 'weigh-in', label: 'Weight-in Station', icon: Scale, component: WeighInTab },
   { id: 'report', label: 'Scrutineering Report', icon: FileBarChart, component: ReportTab },
   { id: 'request', label: 'Competitor Request', icon: Flag, component: RequestTab },
   { id: 'deleted', label: 'Recently Deleted', icon: Trash2, component: DeletedTab },
