@@ -142,6 +142,8 @@ const initialFormData = {
   model: '',
   engineDisplacement: '',
   engineCode: '',
+  engineSealNumber: '',
+  gearSealNumber: '',
   transmission: '',
   drivetrain: '',
   gearShiftPattern: '',
