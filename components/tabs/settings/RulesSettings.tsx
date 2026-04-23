@@ -46,12 +46,26 @@ export default function RulesSettings() {
     customTables: {},
     sponsorStickers: {}
   });
+  const [successBallastRules, setSuccessBallastRules] = useState<Record<string, { rank1: number, rank2: number, rank3: number }>>({});
   const [tireBrands, setTireBrands] = useState<string[]>(['Yokohama', 'Hankook', 'Giti']);
 
   useEffect(() => {
     fetchRules();
     fetchTireRules();
+    fetchSuccessBallastRules();
   }, []);
+
+  const fetchSuccessBallastRules = async () => {
+    try {
+      const docRef = doc(db, 'settings', 'success_ballast_rules');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setSuccessBallastRules(docSnap.data().rules || {});
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const fetchTireRules = async () => {
     try {
@@ -92,6 +106,7 @@ export default function RulesSettings() {
     try {
       await setDoc(doc(db, 'settings', 'weight_rules'), config);
       await setDoc(doc(db, 'settings', 'tire_rules'), { brands: tireBrands });
+      await setDoc(doc(db, 'settings', 'success_ballast_rules'), { rules: successBallastRules });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'settings/weight_rules');
     } finally {
@@ -398,56 +413,62 @@ export default function RulesSettings() {
       )}
 
       {/* Sub-tabs for rule types */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-100 mt-6 overflow-x-auto scrollbar-hide">
         <button
           onClick={() => setActiveRuleTab('weighting')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-6 py-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all ${
             activeRuleTab === 'weighting'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
-          <Scale className="w-4 h-4" />
-          Weighting Rules
+          Weighting
+        </button>
+        <button
+          onClick={() => setActiveRuleTab('success_ballast')}
+          className={`flex items-center gap-2 px-6 py-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all ${
+            activeRuleTab === 'success_ballast'
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          Success Ballast
         </button>
         <button
           onClick={() => setActiveRuleTab('marking_tire')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-6 py-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all ${
             activeRuleTab === 'marking_tire'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
-          <Plus className="w-4 h-4" />
-          Marking Tire
+          Tires
         </button>
         <button
           onClick={() => setActiveRuleTab('sponsor_sticker')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-6 py-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all ${
             activeRuleTab === 'sponsor_sticker'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
-          <Tag className="w-4 h-4" />
-          Sponsor Sticker
+          Sponsors
         </button>
       </div>
 
       {activeRuleTab === 'weighting' && (
-        <div className="flex flex-col xl:flex-row gap-6">
+        <div className="flex flex-col xl:flex-row gap-8 mt-6">
           {/* Series Navigation */}
           <div className="xl:w-64 flex-shrink-0">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-2">Series</h3>
             <div className="flex flex-row xl:flex-col gap-1 overflow-x-auto xl:overflow-x-visible pb-2 xl:pb-0 scrollbar-hide">
               {SERIES_CATEGORIES.map(category => (
                 <button
                   key={category}
                   onClick={() => setActiveSeriesTab(category)}
-                  className={`flex-shrink-0 text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex-shrink-0 text-left px-4 py-2.5 rounded-lg text-sm transition-all ${
                     activeSeriesTab === category
-                      ? 'bg-slate-900 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100'
+                      ? 'bg-slate-100 text-slate-900 font-bold'
+                      : 'text-slate-500 hover:bg-slate-50'
                   }`}
                 >
                   {category}
@@ -457,63 +478,59 @@ export default function RulesSettings() {
           </div>
 
           {/* Configuration Form */}
-          <div className="flex-1 space-y-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between">
+          <div className="flex-1 space-y-10">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-6">
               <div>
-                <h3 className="text-xl font-light text-slate-900">{activeSeriesTab} Weight Rules</h3>
-                <p className="text-sm text-slate-500 mt-1">Configure base minimum weights and dynamic penalties.</p>
+                <h3 className="text-xl font-bold text-slate-900">{activeSeriesTab}</h3>
+                <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wide">Technical Regulation Weights</p>
               </div>
               <button 
                 onClick={saveRules}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+                className="flex items-center gap-2 px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-xs font-bold transition-all"
               >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Save Changes
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save
               </button>
             </div>
 
             {/* Base Minimum Weights */}
             <div>
-              <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
-                <div className="flex flex-col">
-                  <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-widest">Base Minimum Weights</h4>
-                  <p className="text-xs text-slate-500 mt-1">Configure columns based on the series&apos; unique conditions.</p>
-                </div>
+              <div className="flex items-center justify-between mb-6">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Base Minimum Weights</h4>
                 <div className="flex gap-2">
                   <button 
                     onClick={handleBaseWeightAddColumn}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-100 border border-slate-200 transition-colors"
+                    className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded text-[10px] font-bold uppercase tracking-wider hover:bg-slate-50 transition-colors"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Add Category Column
+                    + Column
                   </button>
                   <button 
                     onClick={handleBaseWeightAddRow}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-100 border border-orange-200 transition-colors"
+                    className="px-3 py-1.5 bg-slate-900 text-white rounded text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Add Rule Row
+                    + Row
                   </button>
                 </div>
               </div>
               
               <div className="space-y-4">
                 {currentBaseWeightsConf.columns.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                    <span className="text-xs font-medium text-slate-500 mr-2 flex items-center">Active Condition Columns:</span>
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {currentBaseWeightsConf.columns.map((col: string, colIdx: number) => (
-                      <div key={col} className="flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">
+                      <div key={col} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-1 rounded text-[10px] font-bold text-slate-500 uppercase">
                         {colIdx > 0 && (
-                          <button onClick={() => moveBaseWeightColumn(colIdx, 'left')} className="text-slate-400 hover:text-orange-500 -ml-0.5">
+                          <button onClick={() => moveBaseWeightColumn(colIdx, 'left')} className="hover:text-slate-900">
                             <ChevronLeft className="w-3 h-3" />
                           </button>
                         )}
-                        <span className="text-xs font-medium text-slate-700">{col}</span>
+                        <span>{col}</span>
                         {colIdx < currentBaseWeightsConf.columns.length - 1 && (
-                          <button onClick={() => moveBaseWeightColumn(colIdx, 'right')} className="text-slate-400 hover:text-orange-500">
+                          <button onClick={() => moveBaseWeightColumn(colIdx, 'right')} className="hover:text-slate-900">
                             <ChevronRight className="w-3 h-3" />
                           </button>
                         )}
-                        <button onClick={() => handleBaseWeightRemoveColumn(col)} className="text-slate-400 hover:text-red-500 ml-1">
+                        <button onClick={() => handleBaseWeightRemoveColumn(col)} className="hover:text-rose-500 ml-1">
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
@@ -526,56 +543,56 @@ export default function RulesSettings() {
                 ) : currentBaseWeightsConf.columns.length === 0 ? (
                   <p className="text-sm text-amber-500 py-4 text-center border border-dashed border-amber-200 bg-amber-50 rounded-xl">Please add a Condition Column first to start defining rules.</p>
                 ) : (
-                  <div className="overflow-x-auto pb-4">
-                    <table className="w-full text-left bg-white border border-slate-200 rounded-xl text-sm whitespace-nowrap">
-                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium text-xs uppercase tracking-wider">
+                  <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                    <table className="w-full text-left bg-white text-xs whitespace-nowrap">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
                         <tr>
                           {currentBaseWeightsConf.columns.map((col: string) => (
                             <th key={col} className="px-4 py-3 min-w-[150px]">{col}</th>
                           ))}
-                          <th className="px-4 py-3 min-w-[120px] border-l border-slate-200">Fix weight (kg)</th>
-                          <th className="px-4 py-3 min-w-[150px]">Vary Weight (+kg)</th>
+                          <th className="px-4 py-3 min-w-[120px] border-l border-slate-200">Base Weight</th>
+                          <th className="px-4 py-3 min-w-[150px]">Vary (+/-)</th>
                           <th className="px-4 py-3 w-10"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {currentBaseWeightsConf.rows.map((row: any, idx: number) => (
-                          <tr key={row.id || idx} className="hover:bg-slate-50/50">
+                          <tr key={row.id || idx} className="hover:bg-slate-50/30 transition-colors">
                             {currentBaseWeightsConf.columns.map((col: string) => (
-                              <td key={col} className="px-4 py-2">
+                              <td key={col} className="px-3 py-2">
                                 <input 
                                   type="text" 
                                   value={row.values[col] || ''} 
                                   onChange={(e) => handleBaseWeightValueChange(idx, col, e.target.value)}
-                                  className="w-full px-2 py-1.5 border border-slate-200 rounded focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all placeholder-slate-300"
-                                  placeholder="e.g. 4 สูบ / Turbo"
+                                  className="w-full px-2 py-1 bg-transparent border-b border-transparent focus:border-slate-300 outline-none transition-all placeholder-slate-200"
+                                  placeholder="..."
                                 />
                               </td>
                             ))}
-                            <td className="px-4 py-2 border-l border-slate-200">
+                            <td className="px-3 py-2 border-l border-slate-100">
                               <input 
                                 type="text" 
                                 value={row.weight || ''} 
                                 onChange={(e) => handleBaseWeightRowChange(idx, 'weight', e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all font-mono placeholder-slate-300"
-                                placeholder="e.g. 1040 or -"
+                                className="w-full px-2 py-1 bg-transparent border-b border-transparent focus:border-slate-300 outline-none transition-all font-mono"
+                                placeholder="0"
                               />
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-3 py-2">
                               <input 
                                 type="text" 
                                 value={row.committeeWeight || ''} 
                                 onChange={(e) => handleBaseWeightRowChange(idx, 'committeeWeight', e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all font-mono placeholder-slate-300"
-                                placeholder="e.g. +100kg"
+                                className="w-full px-2 py-1 bg-transparent border-b border-transparent focus:border-slate-300 outline-none transition-all font-mono"
+                                placeholder="..."
                               />
                             </td>
-                            <td className="px-4 py-2 text-right">
+                            <td className="px-3 py-2 text-right">
                               <button 
                                 onClick={() => handleBaseWeightRemoveRow(idx)}
-                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </td>
                           </tr>
@@ -840,170 +857,221 @@ export default function RulesSettings() {
         </div>
       )}
       {activeRuleTab === 'sponsor_sticker' && (
-        <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between mb-8">
+        <div className="mt-8">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-10">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">Sponsor Guides</h3>
+              <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wide">Layout & placement standards</p>
+            </div>
+            <button 
+              onClick={saveRules}
+              disabled={isSaving}
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-xs font-bold transition-all"
+            >
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 inline mr-1" />}
+              Save
+            </button>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-12">
+            <div className="lg:w-48 flex-shrink-0 space-y-10">
               <div>
-                <h3 className="text-xl font-light text-slate-900">Sponsor Sticker Guides</h3>
-                <p className="text-sm text-slate-500 mt-1">Upload and manage sticker layout guides for each series and year.</p>
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Select Year</h4>
+                <div className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scrollbar-hide">
+                  {['2024', '2025', '2026', '2027', '2028'].map(year => (
+                    <button
+                      key={year}
+                      onClick={() => setActiveYearTab(year)}
+                      className={`flex-shrink-0 text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        activeYearTab === year
+                          ? 'bg-slate-100 text-slate-900 font-bold'
+                          : 'text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {year}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <button 
-                onClick={saveRules}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
-              >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Save Changes
-              </button>
+
+              <div>
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Select Series</h4>
+                <div className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scrollbar-hide">
+                  {SERIES_CATEGORIES.map(category => (
+                    <button
+                      key={category}
+                      onClick={() => setActiveSeriesTab(category)}
+                      className={`flex-shrink-0 text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        activeSeriesTab === category
+                          ? 'bg-slate-100 text-slate-900 font-bold'
+                          : 'text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-8">
-              <div className="lg:w-48 flex-shrink-0 space-y-6">
-                <div>
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Year</h4>
-                  <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
-                    {['2024', '2025', '2026', '2027', '2028'].map(year => (
-                      <button
-                        key={year}
-                        onClick={() => setActiveYearTab(year)}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                          activeYearTab === year
-                            ? 'bg-orange-500 text-white shadow-md'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        {year}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Series</h4>
-                  <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scrollbar-hide">
-                    {SERIES_CATEGORIES.map(category => (
-                      <button
-                        key={category}
-                        onClick={() => setActiveSeriesTab(category)}
-                        className={`flex-shrink-0 text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                          activeSeriesTab === category
-                            ? 'bg-slate-900 text-white shadow-md'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 underline decoration-orange-500/0 hover:decoration-orange-500/50 underline-offset-4'
-                        }`}
-                      >
-                        {category}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 space-y-6 border-l border-slate-100 lg:pl-8">
-                <div className="bg-slate-50/50 rounded-2xl p-8 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center group transition-all hover:border-orange-200">
-                  <div className="mb-4">
-                    <div className="w-16 h-16 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                      <Tag className="w-8 h-8 text-orange-500" />
-                    </div>
-                  </div>
-                  <h4 className="font-semibold text-slate-900 mb-2">Guide for {activeSeriesTab} ({activeYearTab})</h4>
-                  <p className="text-sm text-slate-500 max-w-xs mb-6 font-light">Upload the sponsor sticker placement layout. This will be visible to scrutineers during inspection.</p>
-                  
-                  {config.sponsorStickers?.[activeYearTab]?.[activeSeriesTab] ? (
-                    <div className="relative w-full max-w-md aspect-[3/2] rounded-xl overflow-hidden border border-slate-200 shadow-lg group-hover:shadow-xl transition-all mb-4">
-                      <Image 
-                        src={config.sponsorStickers[activeYearTab][activeSeriesTab]} 
-                        alt="Sticker Guide Preview" 
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                      <div className="absolute inset-0 bg-slate-900/40 transition-opacity flex items-center justify-center gap-3 z-10">
-                        <label className="bg-white text-slate-900 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer hover:bg-orange-50 transition-colors">
-                          Replace Image
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                  const base64 = event.target?.result as string;
-                                  const newConfig = { ...config };
-                                  if (!newConfig.sponsorStickers) newConfig.sponsorStickers = {};
-                                  if (!newConfig.sponsorStickers[activeYearTab]) newConfig.sponsorStickers[activeYearTab] = {};
-                                  newConfig.sponsorStickers[activeYearTab][activeSeriesTab] = base64;
-                                  setConfig(newConfig);
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                          />
-                        </label>
-                        <button 
-                          onClick={() => {
-                            const newConfig = { ...config };
-                            delete newConfig.sponsorStickers[activeYearTab][activeSeriesTab];
-                            setConfig(newConfig);
+            <div className="flex-1">
+              <div className="bg-slate-50/50 rounded-2xl p-12 border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-center transition-all">
+                <h4 className="text-sm font-bold text-slate-900 mb-2">{activeSeriesTab} — {activeYearTab}</h4>
+                <p className="text-xs text-slate-500 max-w-xs mb-8 font-light">Official technical layout for sponsor placement.</p>
+                
+                {config.sponsorStickers?.[activeYearTab]?.[activeSeriesTab] ? (
+                  <div className="relative w-full max-w-lg aspect-[3/2] rounded-xl overflow-hidden border border-slate-200 bg-white group shadow-sm transition-all mb-4">
+                    <Image 
+                      src={config.sponsorStickers[activeYearTab][activeSeriesTab]} 
+                      alt="Sticker Guide" 
+                      fill
+                      className="object-contain p-2"
+                      unoptimized
+                    />
+                    <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                      <label className="bg-white text-slate-900 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-50 transition-colors">
+                        Replace
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const base64 = event.target?.result as string;
+                                const newConfig = { ...config };
+                                if (!newConfig.sponsorStickers) newConfig.sponsorStickers = {};
+                                if (!newConfig.sponsorStickers[activeYearTab]) newConfig.sponsorStickers[activeYearTab] = {};
+                                newConfig.sponsorStickers[activeYearTab][activeSeriesTab] = base64;
+                                setConfig(newConfig);
+                              };
+                              reader.readAsDataURL(file);
+                            }
                           }}
-                          className="bg-white text-red-600 px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-50 transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <label className="bg-slate-900 text-white px-8 py-3 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition-all shadow-md active:scale-95">
-                      Upload Guide Image
-                      <input 
-                        type="file" 
-                        className="hidden" 
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                              const base64 = event.target?.result as string;
-                              const newConfig = { ...config };
-                              if (!newConfig.sponsorStickers) newConfig.sponsorStickers = {};
-                              if (!newConfig.sponsorStickers[activeYearTab]) newConfig.sponsorStickers[activeYearTab] = {};
-                              newConfig.sponsorStickers[activeYearTab][activeSeriesTab] = base64;
-                              setConfig(newConfig);
-                            };
-                            reader.readAsDataURL(file);
-                          }
+                        />
+                      </label>
+                      <button 
+                        onClick={() => {
+                          const newConfig = { ...config };
+                          delete newConfig.sponsorStickers[activeYearTab][activeSeriesTab];
+                          setConfig(newConfig);
                         }}
-                      />
-                    </label>
-                  )}
-                </div>
+                        className="bg-rose-500 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-rose-600 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="bg-slate-900 text-white px-8 py-3 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition-all">
+                    Upload Illustration
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const base64 = event.target?.result as string;
+                            const newConfig = { ...config };
+                            if (!newConfig.sponsorStickers) newConfig.sponsorStickers = {};
+                            if (!newConfig.sponsorStickers[activeYearTab]) newConfig.sponsorStickers[activeYearTab] = {};
+                            newConfig.sponsorStickers[activeYearTab][activeSeriesTab] = base64;
+                            setConfig(newConfig);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
-      {activeRuleTab === 'marking_tire' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm overflow-hidden flex flex-col md:w-2/3 lg:w-1/2">
-          <div className="flex items-center justify-between mb-6">
+      {activeRuleTab === 'success_ballast' && (
+        <div className="mt-8 xl:w-2/3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-8">
             <div>
-              <h3 className="text-xl font-light text-slate-900">Marking Tire Configuration</h3>
-              <p className="text-sm text-slate-500 mt-1">Configure the tire brands that can be used in the event.</p>
+              <h3 className="text-xl font-bold text-slate-900">Success Ballast</h3>
+              <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wide">Penalty weights by race ranking</p>
             </div>
             <button 
               onClick={saveRules}
               disabled={isSaving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-xs font-bold transition-all"
             >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Changes
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 inline mr-1" />}
+              Save
             </button>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-widest">Active Tire Brands</h4>
+          <div className="space-y-6">
+            {SERIES_CATEGORIES.map(series => {
+              const rules = successBallastRules[series] || { rank1: 30, rank2: 20, rank3: 10 };
+              return (
+                <div key={series} className="border border-slate-100 rounded-xl p-6 bg-white">
+                  <h4 className="text-sm font-bold text-slate-800 mb-6">{series}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">1st Place (kg)</label>
+                      <input 
+                        type="number" 
+                        value={rules.rank1} 
+                        onChange={(e) => setSuccessBallastRules(prev => ({ ...prev, [series]: { ...rules, rank1: Number(e.target.value) } }))}
+                        className="w-full bg-slate-50 border-none rounded-lg py-2.5 px-4 text-sm font-mono focus:bg-white focus:ring-1 focus:ring-slate-200 outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">2nd Place (kg)</label>
+                      <input 
+                        type="number" 
+                        value={rules.rank2} 
+                        onChange={(e) => setSuccessBallastRules(prev => ({ ...prev, [series]: { ...rules, rank2: Number(e.target.value) } }))}
+                        className="w-full bg-slate-50 border-none rounded-lg py-2.5 px-4 text-sm font-mono focus:bg-white focus:ring-1 focus:ring-slate-200 outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">3rd Place (kg)</label>
+                      <input 
+                        type="number" 
+                        value={rules.rank3} 
+                        onChange={(e) => setSuccessBallastRules(prev => ({ ...prev, [series]: { ...rules, rank3: Number(e.target.value) } }))}
+                        className="w-full bg-slate-50 border-none rounded-lg py-2.5 px-4 text-sm font-mono focus:bg-white focus:ring-1 focus:ring-slate-200 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {activeRuleTab === 'marking_tire' && (
+        <div className="mt-8 md:w-2/3 lg:w-1/2">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-8">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">Tire Brands</h3>
+              <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wide">Authorized suppliers</p>
+            </div>
+            <button 
+              onClick={saveRules}
+              disabled={isSaving}
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg text-xs font-bold transition-all"
+            >
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 inline mr-1" />}
+              Save
+            </button>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Brand Inventory</h4>
               <button 
                 onClick={() => {
                   setPromptModal({
@@ -1019,32 +1087,26 @@ export default function RulesSettings() {
                     }
                   });
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-100 border border-orange-200 transition-colors"
+                className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded text-[10px] font-bold uppercase tracking-wider hover:bg-slate-50 transition-colors"
               >
-                <Plus className="w-3.5 h-3.5" /> Add Brand
+                + Add
               </button>
             </div>
             
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {tireBrands.length === 0 ? (
-                <p className="text-sm text-slate-400 py-2 text-center">No tire brands configured. Add some above.</p>
-              ) : (
-                <div className="flex flex-wrap gap-3">
-                  {tireBrands.map((brand: string, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto min-w-[200px]">
-                      <span className="font-medium text-slate-700">{brand}</span>
-                      <button 
-                        onClick={() => {
-                          setTireBrands(tireBrands.filter(b => b !== brand));
-                        }}
-                        className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors ml-4"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                <p className="col-span-full text-sm text-slate-400 py-8 text-center border font-light border-slate-100 rounded-lg">No tire brands configured.</p>
+              ) : tireBrands.map((brand: string, idx: number) => (
+                <div key={idx} className="flex items-center justify-between bg-white px-4 py-3 rounded-lg border border-slate-100 group">
+                  <span className="text-sm font-semibold text-slate-800">{brand}</span>
+                  <button 
+                    onClick={() => setTireBrands(tireBrands.filter(b => b !== brand))}
+                    className="text-slate-300 hover:text-rose-500 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         </div>

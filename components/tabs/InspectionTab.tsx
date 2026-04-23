@@ -923,6 +923,8 @@ export default function InspectionTab() {
       });
     }
 
+    total += Number(formData.successBallast || 0);
+
     return total;
   };
 

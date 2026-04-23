@@ -15,7 +15,8 @@ import {
   Edit,
   Trash2,
   Printer,
-  MoreVertical
+  MoreVertical,
+  History
 } from 'lucide-react';
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc, deleteDoc, where } from 'firebase/firestore';
@@ -60,6 +61,7 @@ interface RequestItem {
   remark?: string;
   fineAmount?: number;
   penalty?: string;
+  gridPenalty?: number;
   secretarySignName?: string;
   secretarySignDate?: string;
 
@@ -67,9 +69,11 @@ interface RequestItem {
   requireChairmanApproval?: boolean;
   requireStewardApproval?: boolean;
   requireChiefInspectionApproval?: boolean;
+  requireClerkApproval?: boolean;
   chairmanStatus?: 'Pending' | 'Approved' | 'Rejected';
   stewardStatus?: 'Pending' | 'Approved' | 'Rejected';
   chiefInspectionStatus?: 'Pending' | 'Approved' | 'Rejected';
+  clerkStatus?: 'Pending' | 'Approved' | 'Rejected';
   chairmanComment?: string;
   chairmanSignName?: string;
   chairmanSignDate?: string;
@@ -79,6 +83,18 @@ interface RequestItem {
   chiefInspectionComment?: string;
   chiefInspectionSignName?: string;
   chiefInspectionSignDate?: string;
+  clerkComment?: string;
+  clerkSignName?: string;
+  clerkSignDate?: string;
+
+  // Audit Log
+  approvalLog?: {
+    role: string;
+    action: string;
+    timestamp: string;
+    userName: string;
+    comment?: string;
+  }[];
 
   // Old fields for backward compatibility
   team?: string;
@@ -140,14 +156,17 @@ export default function RequestTab() {
     remark: '',
     fineAmount: 0,
     penalty: '',
+    gridPenalty: 0,
     secretarySignName: '',
     secretarySignDate: '',
     requireChairmanApproval: false,
     requireStewardApproval: false,
     requireChiefInspectionApproval: false,
+    requireClerkApproval: false,
     chairmanStatus: 'Pending' as 'Pending' | 'Approved' | 'Rejected',
     stewardStatus: 'Pending' as 'Pending' | 'Approved' | 'Rejected',
     chiefInspectionStatus: 'Pending' as 'Pending' | 'Approved' | 'Rejected',
+    clerkStatus: 'Pending' as 'Pending' | 'Approved' | 'Rejected',
     chairmanComment: '',
     chairmanSignName: '',
     chairmanSignDate: '',
@@ -157,7 +176,11 @@ export default function RequestTab() {
     chiefInspectionComment: '',
     chiefInspectionSignName: '',
     chiefInspectionSignDate: '',
-    status: 'Pending' as 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'
+    clerkComment: '',
+    clerkSignName: '',
+    clerkSignDate: '',
+    status: 'Pending' as 'Pending' | 'Approved' | 'Rejected' | 'Cancelled',
+    approvalLog: [] as { role: string; action: string; timestamp: string; userName: string; comment?: string; }[]
   };
   
   const [newRequest, setNewRequest] = useState(initialRequestState);
@@ -185,6 +208,7 @@ export default function RequestTab() {
   const canSignChief = ['admin', 'head_scrutineer'].includes(userRole || '');
   const canSignSteward = ['admin', 'steward'].includes(userRole || '');
   const canSignSecretary = ['admin', 'secretary'].includes(userRole || '');
+  const canSignClerk = ['admin', 'clerk_of_the_course'].includes(userRole || '');
   const [eventFilter, setEventFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof RequestItem, direction: 'asc' | 'desc' } | null>(null);
@@ -294,16 +318,33 @@ export default function RequestTab() {
     try {
       const now = new Date().toISOString();
       const signName = auth.currentUser.displayName || auth.currentUser.email || 'Secretary';
+      const logEntry = {
+        role: 'Secretary',
+        action: 'Approved',
+        timestamp: now,
+        userName: signName,
+        comment: newRequest.remark
+      };
 
       await updateDoc(doc(db, 'requests', editingId), {
         ...newRequest,
         status: 'Approved',
         secretarySignName: signName,
         secretarySignDate: now,
-        updatedAt: now
+        updatedAt: now,
+        approvalLog: [...(newRequest.approvalLog || []), logEntry]
       });
       
-      setNewRequest(initialRequestState);
+      // Notify Competitor
+      if (newRequest.userId) {
+        createNotification({
+          userId: newRequest.userId,
+          title: 'Request Approved',
+          message: `Your request ${editingId} has been approved by the Secretary.`,
+          type: 'request_approved',
+          link: 'request',
+        });
+      }
       setCurrentStep(1);
       setEditingId(null);
       setViewMode(false);
@@ -363,6 +404,9 @@ export default function RequestTab() {
       } else if (type === 'chief_inspection') {
         updates.requireChiefInspectionApproval = !newRequest.requireChiefInspectionApproval;
         if (updates.requireChiefInspectionApproval) updates.chiefInspectionStatus = 'Pending';
+      } else if (type === 'clerk') {
+        updates.requireClerkApproval = !newRequest.requireClerkApproval;
+        if (updates.requireClerkApproval) updates.clerkStatus = 'Pending';
       }
       
       await updateDoc(doc(db, 'requests', editingId), updates);
@@ -383,12 +427,23 @@ export default function RequestTab() {
     setIsSubmitting(true);
     
     try {
+      const now = new Date().toISOString();
+      const userName = auth.currentUser.displayName || auth.currentUser.email || 'Chairman';
+      const logEntry = {
+        role: 'Chairman',
+        action: 'Approved',
+        timestamp: now,
+        userName,
+        comment: newRequest.chairmanComment
+      };
+
       const updates = {
         chairmanStatus: 'Approved',
-        chairmanSignName: auth.currentUser.displayName || auth.currentUser.email || 'Chairman',
-        chairmanSignDate: new Date().toISOString().split('T')[0],
+        chairmanSignName: userName,
+        chairmanSignDate: now,
         chairmanComment: newRequest.chairmanComment || '',
-        updatedAt: new Date().toISOString()
+        updatedAt: now,
+        approvalLog: [...(newRequest.approvalLog || []), logEntry]
       };
       
       await updateDoc(doc(db, 'requests', editingId), updates);
@@ -409,12 +464,23 @@ export default function RequestTab() {
     setIsSubmitting(true);
     
     try {
+      const now = new Date().toISOString();
+      const userName = auth.currentUser.displayName || auth.currentUser.email || 'Chief Inspection';
+      const logEntry = {
+        role: 'Chief Inspection',
+        action: 'Approved',
+        timestamp: now,
+        userName,
+        comment: newRequest.chiefInspectionComment
+      };
+
       const updates = {
         chiefInspectionStatus: 'Approved' as const,
-        chiefInspectionSignName: auth.currentUser.displayName || auth.currentUser.email || 'Chief Inspection',
-        chiefInspectionSignDate: new Date().toISOString().split('T')[0],
+        chiefInspectionSignName: userName,
+        chiefInspectionSignDate: now,
         chiefInspectionComment: newRequest.chiefInspectionComment || '',
-        updatedAt: new Date().toISOString()
+        updatedAt: now,
+        approvalLog: [...(newRequest.approvalLog || []), logEntry]
       };
 
       await updateDoc(doc(db, 'requests', editingId), updates);
@@ -432,12 +498,60 @@ export default function RequestTab() {
     setIsSubmitting(true);
     
     try {
+      const now = new Date().toISOString();
+      const userName = auth.currentUser.displayName || auth.currentUser.email || 'Steward';
+      const logEntry = {
+        role: 'Steward',
+        action: 'Approved',
+        timestamp: now,
+        userName,
+        comment: newRequest.stewardComment
+      };
+
       const updates = {
         stewardStatus: 'Approved',
-        stewardSignName: auth.currentUser.displayName || auth.currentUser.email || 'Steward',
-        stewardSignDate: new Date().toISOString().split('T')[0],
+        stewardSignName: userName,
+        stewardSignDate: now,
         stewardComment: newRequest.stewardComment || '',
-        updatedAt: new Date().toISOString()
+        updatedAt: now,
+        approvalLog: [...(newRequest.approvalLog || []), logEntry]
+      };
+      
+      await updateDoc(doc(db, 'requests', editingId), updates);
+      
+      setNewRequest(prev => ({ 
+        ...prev, 
+        ...updates
+      } as any));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'requests');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClerkApprove = async () => {
+    if (!auth.currentUser || !editingId) return;
+    setIsSubmitting(true);
+    
+    try {
+      const now = new Date().toISOString();
+      const userName = auth.currentUser.displayName || auth.currentUser.email || 'Clerk of the Course';
+      const logEntry = {
+        role: 'Clerk of the Course',
+        action: 'Approved',
+        timestamp: now,
+        userName,
+        comment: newRequest.clerkComment
+      };
+
+      const updates = {
+        clerkStatus: 'Approved',
+        clerkSignName: userName,
+        clerkSignDate: now,
+        clerkComment: newRequest.clerkComment || '',
+        updatedAt: now,
+        approvalLog: [...(newRequest.approvalLog || []), logEntry]
       };
       
       await updateDoc(doc(db, 'requests', editingId), updates);
@@ -465,7 +579,7 @@ export default function RequestTab() {
         });
         
         createNotification({
-          targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward'],
+          targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward', 'clerk_of_the_course'],
           title: 'Request Updated',
           message: `${auth.currentUser.displayName || auth.currentUser.email} updated request.`,
           type: 'request_update',
@@ -479,6 +593,15 @@ export default function RequestTab() {
           userId: auth.currentUser.uid,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
+        });
+
+        // Notify Secretary and Admins
+        createNotification({
+          targetRoles: ['admin', 'secretary'],
+          title: 'New Competitor Request',
+          message: `A new request has been submitted by ${newRequest.driverName || 'Competitor'}.`,
+          type: 'new_request',
+          link: 'request',
         });
 
         createNotification({
@@ -942,6 +1065,16 @@ export default function RequestTab() {
                   />
                 </div>
                 <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-700">Grid Penalty</span>
+                  <input 
+                    type="number" 
+                    placeholder="Spots" 
+                    value={newRequest.gridPenalty || ''}
+                    onChange={(e) => setNewRequest({...newRequest, gridPenalty: Number(e.target.value)})}
+                    className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 w-24"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-slate-700">Fine Amount</span>
                   <input 
                     type="number" 
@@ -1036,6 +1169,14 @@ export default function RequestTab() {
                         >
                           <span>Request Chief Inspection Approval</span>
                           {newRequest.requireChiefInspectionApproval && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                        </DropdownMenu.Item>
+
+                        <DropdownMenu.Item 
+                          onClick={() => handleToggleApproval('clerk')}
+                          className="flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer outline-none transition-colors"
+                        >
+                          <span>Request Clerk of the Course Approval</span>
+                          {newRequest.requireClerkApproval && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                         </DropdownMenu.Item>
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>
@@ -1176,14 +1317,56 @@ export default function RequestTab() {
               </div>
 
               <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Grid Penalty</div>
+                <div className="text-sm text-slate-900">{newRequest.gridPenalty ? `${newRequest.gridPenalty} positions` : '-'}</div>
+              </div>
+
+              <div>
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Fine Amount</div>
-                <div className="text-sm text-slate-900">{newRequest.fineAmount ? `${newRequest.fineAmount} THB` : '-'}</div>
+                <div className="text-sm text-slate-900">{newRequest.fineAmount ? `${Number(newRequest.fineAmount).toLocaleString()} THB` : '-'}</div>
               </div>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 print:grid-cols-2 gap-6">
+          {/* Approval Log */}
+          <div className="col-span-full bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6">
+            <h3 className="text-lg font-medium text-slate-800 mb-6 flex items-center gap-2">
+              <History className="w-5 h-5 text-slate-400" />
+              Approval Log
+            </h3>
+            <div className="space-y-4">
+              {newRequest.approvalLog && newRequest.approvalLog.length > 0 ? (
+                newRequest.approvalLog.map((log, idx) => (
+                  <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-orange-500 border border-slate-200 shrink-0 font-medium text-xs">
+                      {log.role.charAt(0)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-slate-900">{log.userName} ({log.role})</span>
+                        <span className="text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                          log.action === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
+                        }`}>
+                          {log.action}
+                        </span>
+                      </div>
+                      {log.comment && (
+                        <p className="text-xs text-slate-600 font-light italic">&quot;{log.comment}&quot;</p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6 text-slate-400 text-sm font-light">No approval logs yet.</div>
+              )}
+            </div>
+          </div>
+
           {/* Racer Card */}
           <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
             <div className="flex items-center justify-between mb-8">
@@ -1281,6 +1464,57 @@ export default function RequestTab() {
           )}
 
           {/* Clerk of the Course Card */}
+          {newRequest.requireClerkApproval && (
+            <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-lg font-medium text-slate-800">Clerk of the Course</h3>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                  newRequest.clerkStatus === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                  newRequest.clerkStatus === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                  'bg-amber-50 text-amber-600 border-amber-100'
+                }`}>
+                  {newRequest.clerkStatus === 'Approved' ? 'Approved' : 
+                   newRequest.clerkStatus === 'Rejected' ? 'Rejected' : 
+                   'Waiting for approve'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Name</div>
+                  <div className="text-sm text-blue-600">{newRequest.clerkSignName || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Sign Date</div>
+                  <div className="text-sm text-blue-600">
+                    {newRequest.clerkSignDate ? new Date(newRequest.clerkSignDate).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}
+                  </div>
+                </div>
+              </div>
+              <div className="mb-6">
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">Comment</div>
+                <input 
+                  type="text" 
+                  placeholder="Comment" 
+                  value={newRequest.clerkComment || ''}
+                  onChange={(e) => setNewRequest({ ...newRequest, clerkComment: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-light text-slate-900 focus:outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 print:border-none print:bg-transparent print:p-0 print:h-auto print:placeholder-transparent"
+                  disabled={newRequest.clerkStatus === 'Approved' || isSubmitting || (!canSignClerk && !canEditAll)}
+                />
+              </div>
+              <div className="mt-auto flex justify-end print:hidden">
+                <button 
+                  onClick={handleClerkApprove}
+                  className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  disabled={newRequest.clerkStatus === 'Approved' || isSubmitting || (!canSignClerk && !canEditAll)}
+                >
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {newRequest.clerkStatus === 'Approved' ? 'Approved' : 'Approve'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Clerk of the Course Card (Legacy Layout Item) */}
           <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 p-6 flex flex-col h-full">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-lg font-medium text-slate-800">Clerk of the Course</h3>
@@ -1756,6 +1990,45 @@ export default function RequestTab() {
                     </div>
                   </div>
                 </div>
+
+                {/* Penalty & Fine Section */}
+                {(canEditAll || canSignSecretary) && (
+                  <div>
+                    <h3 className="text-lg font-light text-slate-900 mb-6 border-b border-slate-100 pb-2">Penalty & Fine Section</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Fine Amount (THB) / ค่าปรับ (เงิน)</label>
+                        <input 
+                          type="number"
+                          placeholder="Amount in THB"
+                          value={newRequest.fineAmount || ''}
+                          onChange={(e) => setNewRequest({...newRequest, fineAmount: Number(e.target.value)})}
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Grid Penalty / ปรับอันดับ</label>
+                        <input 
+                          type="number"
+                          placeholder="Positions"
+                          value={newRequest.gridPenalty || ''}
+                          onChange={(e) => setNewRequest({...newRequest, gridPenalty: Number(e.target.value)})}
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2 relative">
+                        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Other Penalty / อื่นๆ</label>
+                        <input 
+                          type="text"
+                          placeholder="e.g. Disqualified"
+                          value={newRequest.penalty || ''}
+                          onChange={(e) => setNewRequest({...newRequest, penalty: e.target.value})}
+                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3.5 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 

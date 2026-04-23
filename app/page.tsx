@@ -9,16 +9,17 @@ import {
   LayoutDashboard, 
   FileText, 
   CheckSquare, 
-  ClipboardList, 
-  FileCheck, 
-  MessageSquare, 
-  Trash2,
-  Bell,
-  Search,
   Settings,
-  Menu,
   LogOut,
-  Scale
+  Scale,
+  Wrench,
+  FileBarChart,
+  Flag,
+  Trash2,
+  Trophy,
+  Search,
+  Bell,
+  Menu
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/store';
@@ -37,6 +38,7 @@ const DashboardTab = dynamic(() => import('@/components/tabs/DashboardTab'), { l
 const EntryFormTab = dynamic(() => import('@/components/tabs/EntryFormTab'), { loading: LoadingFallback });
 const ChecklistTab = dynamic(() => import('@/components/tabs/ChecklistTab'), { loading: LoadingFallback });
 const InspectionTab = dynamic(() => import('@/components/tabs/InspectionTab'), { loading: LoadingFallback });
+const RacingResultTab = dynamic(() => import('@/components/tabs/RacingResultTab'), { loading: LoadingFallback });
 const WeighInTab = dynamic(() => import('@/components/tabs/WeighInTab'), { loading: LoadingFallback });
 const ReportTab = dynamic(() => import('@/components/tabs/ReportTab'), { loading: LoadingFallback });
 const RequestTab = dynamic(() => import('@/components/tabs/RequestTab'), { loading: LoadingFallback });
@@ -48,10 +50,11 @@ const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, component: DashboardTab },
   { id: 'entry-form', label: 'Entry Form', icon: FileText, component: EntryFormTab },
   { id: 'checklist', label: 'Candidate Checklist', icon: CheckSquare, component: ChecklistTab },
-  { id: 'inspection', label: 'Inspection Form', icon: ClipboardList, component: InspectionTab },
+  { id: 'inspection', label: 'Inspection Form', icon: Wrench, component: InspectionTab },
+  { id: 'racing-result', label: 'Racing Result', icon: Trophy, component: RacingResultTab },
   { id: 'weigh-in', label: 'Weigh-in Station', icon: Scale, component: WeighInTab },
-  { id: 'report', label: 'Scrutineering Report', icon: FileCheck, component: ReportTab },
-  { id: 'request', label: 'Competitor Request', icon: MessageSquare, component: RequestTab },
+  { id: 'report', label: 'Scrutineering Report', icon: FileBarChart, component: ReportTab },
+  { id: 'request', label: 'Competitor Request', icon: Flag, component: RequestTab },
   { id: 'deleted', label: 'Recently Deleted', icon: Trash2, component: DeletedTab },
   { id: 'settings', label: 'Settings', icon: Settings, component: SettingsTab },
 ];
@@ -73,10 +76,10 @@ export default function Home() {
       case 'scrutineer_staff':
       case 'offsite_scrutineer':
       case 'steward':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request', 'settings', 'weigh-in'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'racing-result', 'weigh-in', 'report', 'request', 'settings'].includes(t.id));
       case 'competitor':
       case 'user':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'request', 'settings'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'racing-result', 'request', 'settings'].includes(t.id));
       default:
         return TABS.filter(t => ['dashboard', 'settings'].includes(t.id));
     }

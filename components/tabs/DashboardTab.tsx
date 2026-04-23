@@ -8,7 +8,10 @@ import {
   AlertTriangle, 
   Clock,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  ShieldAlert,
+  Wallet,
+  Grid
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -273,6 +276,71 @@ export default function DashboardTab() {
           </div>
         </motion.div>
       </div>
+
+      {isCompetitor && requests.some(r => r.fineAmount > 0 || r.gridPenalty > 0 || r.penalty) && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, type: "spring", stiffness: 300, damping: 30 }}
+          className="glass-panel p-6 border-rose-100 bg-rose-50/10"
+        >
+          <div className="flex items-center gap-2 mb-6">
+            <ShieldAlert className="w-5 h-5 text-rose-500" />
+            <h3 className="text-lg font-medium text-slate-900">Current Penalties & Fines</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {requests.filter(r => r.fineAmount > 0 || r.gridPenalty > 0 || r.penalty).map((r, i) => (
+              <div key={r.id} className="p-4 rounded-2xl bg-white border border-rose-100 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-2 opacity-5">
+                  <AlertTriangle className="w-12 h-12 text-rose-500" />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Request #{r.id}</span>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{r.requestPermissionTopic}</span>
+                  </div>
+                  
+                  {r.fineAmount > 0 && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-500">
+                        <Wallet className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-medium leading-none mb-1">Fine Amount</p>
+                        <p className="text-sm font-semibold text-slate-900">{r.fineAmount.toLocaleString()} THB</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {r.gridPenalty > 0 && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-500">
+                        <Grid className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-medium leading-none mb-1">Grid Penalty</p>
+                        <p className="text-sm font-semibold text-slate-900">{r.gridPenalty} Positions</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {r.penalty && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-500">
+                        <AlertTriangle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-medium leading-none mb-1">Other Punishment</p>
+                        <p className="text-sm font-medium text-slate-700">{r.penalty}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
     </div>
   );

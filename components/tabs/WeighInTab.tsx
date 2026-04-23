@@ -2,9 +2,9 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ChevronDown, Save, CheckCircle2, XCircle, Scale, Database } from 'lucide-react';
+import { Search, ChevronDown, Save, CheckCircle2, XCircle, Scale, Database, History, X } from 'lucide-react';
 import { db, auth } from '@/firebase';
-import { collection, doc, setDoc, query, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, query, where, onSnapshot, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
 import { useAppStore } from '@/lib/store';
 import { createNotification } from '@/lib/notifications';
 
@@ -33,6 +33,7 @@ interface WeighInLog {
   status: 'PASSED' | 'FAILED' | 'PENDING';
   updatedAt?: string;
   recordedBy?: string;
+  history?: any[];
 }
 
 export default function WeighInTab() {
@@ -41,36 +42,61 @@ export default function WeighInTab() {
   const [selectedSession, setSelectedSession] = useState<'Pre-Race' | 'Post-Race'>('Pre-Race');
   const [searchCar, setSearchCar] = useState('');
   const [selectedSeries, setSelectedSeries] = useState('All Series');
+  const [logModalCarNumber, setLogModalCarNumber] = useState<string | null>(null);
 
   const { entries, userRole } = useAppStore();
   const [inspections, setInspections] = useState<any[]>([]);
   const [weighInLogs, setWeighInLogs] = useState<Record<string, WeighInLog>>({});
+  const [racingResults, setRacingResults] = useState<any[]>([]);
+  const [successBallastRules, setSuccessBallastRules] = useState<Record<string, { rank1: number, rank2: number, rank3: number }>>({});
   
   // Local transient state for inputs before save
   const [localInputs, setLocalInputs] = useState<Record<string, number | ''>>({});
 
-  // Fetch Inspections to calculate required weight
+  // Fetch Inspections
   useEffect(() => {
     if (!auth.currentUser || userRole === null) return;
-    
     let q;
     if (userRole === 'competitor' || userRole === 'user') {
       q = query(collection(db, 'car_inspections'), where('userId', '==', auth.currentUser.uid));
     } else {
       q = query(collection(db, 'car_inspections'));
     }
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data: any[] = [];
-      snapshot.forEach(doc => {
-        data.push({ id: doc.id, ...doc.data() });
-      });
+      snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
       setInspections(data);
-    }, (error) => {
-      console.error('Error fetching inspections:', error);
     });
     return () => unsubscribe();
   }, [userRole]);
+
+  // Fetch Rules & Racing Results
+  useEffect(() => {
+    const fetchRules = async () => {
+      try {
+        const docRef = doc(db, 'settings', 'success_ballast_rules');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setSuccessBallastRules(docSnap.data().rules || {});
+        }
+      } catch (error) {
+        console.error("Failed to fetch ballast rules", error);
+      }
+    };
+    fetchRules();
+
+    if (!auth.currentUser) return;
+    const q = query(
+      collection(db, 'racing_results'),
+      where('eventId', '==', selectedEvent)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data: any[] = [];
+      snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
+      setRacingResults(data);
+    });
+    return () => unsubscribe();
+  }, [selectedEvent]);
 
   // Fetch Weigh-in Logs for current Event, Race, Session
   useEffect(() => {
@@ -100,14 +126,14 @@ export default function WeighInTab() {
     const weights: Record<string, number> = {};
     inspections.forEach(ins => {
       if (ins.carNumber && ins.formData) {
-        let total = Number(ins.formData.baseWeight || 0);
+        let bop = Number(ins.formData.baseWeight || 0);
 
-        // Dynamic Weights
+        // Dynamic Weights (Adjustment & Penalty)
         ins.formData.dynamicWeights?.forEach((d: any) => {
-          if (d.isChecked) total += Number(d.weight || 0);
+          if (d.isChecked) bop += Number(d.weight || 0);
         });
 
-        // Custom Table Selections
+        // Custom Table Selections (Adjustment & Penalty)
         if (ins.formData.customTablesData && ins.formData.customTablesSelections) {
           ins.formData.customTablesData.forEach((table: any) => {
             const selections = ins.formData.customTablesSelections[table.id];
@@ -115,23 +141,53 @@ export default function WeighInTab() {
               table.rows.forEach((row: any) => {
                 const isSelected = table.selectionType === 'single' ? selections === row.id : (Array.isArray(selections) && selections.includes(row.id));
                 if (isSelected) {
-                  if (table.hasWeight) total += Number(row.weight || 0);
-                  if (table.hasCommitteeWeight) total += Number(row.committeeWeight || 0);
+                  if (table.hasWeight) bop += Number(row.weight || 0);
+                  if (table.hasCommitteeWeight) bop += Number(row.committeeWeight || 0);
                 }
               });
             }
           });
         }
 
-        // Include Success Ballast (placeholder for future)
-        const successBallast = Number(ins.formData.successBallast || 0);
-        total += successBallast;
+        // Calculate auto Success Ballast
+        let autoBallast = 0;
+        const rules = successBallastRules[ins.series] || { rank1: 30, rank2: 20, rank3: 10 };
+        racingResults.forEach(r => {
+          if (r.series === ins.series && Number(r.raceNumber) < Number(selectedRace)) {
+            const rank = r.results?.[ins.carNumber];
+            if (rank === 1) autoBallast += rules.rank1;
+            else if (rank === 2) autoBallast += rules.rank2;
+            else if (rank === 3) autoBallast += rules.rank3;
+          }
+        });
 
-        // Prefer latest inspection if multiple (assuming naturally sorted or last overrides)
-        weights[ins.carNumber] = total;
+        // Include Success Ballast (Auto calculated + manual placeholder if any)
+        const manualBallast = Number(ins.formData.successBallast || 0);
+        const successBallastTotal = autoBallast + manualBallast;
+
+        // Store the breakdown
+        weights[ins.carNumber] = {
+           bop,
+           successBallast: successBallastTotal,
+           total: bop + successBallastTotal
+        };
       }
     });
     return weights;
+  }, [inspections, racingResults, selectedRace, successBallastRules]);
+
+  const inspectionDataMap = useMemo(() => {
+    const dataMap: Record<string, { racerName?: string, engineSeal?: string, gearSeal?: string }> = {};
+    inspections.forEach(ins => {
+      if (ins.carNumber) {
+        dataMap[ins.carNumber] = {
+          racerName: ins.racerName || ins.formData?.racerName,
+          engineSeal: ins.formData?.engineSealNumber,
+          gearSeal: ins.formData?.gearSealNumber,
+        };
+      }
+    });
+    return dataMap;
   }, [inspections]);
 
   // Combined data for table
@@ -147,19 +203,25 @@ export default function WeighInTab() {
     return filtered.map(entry => {
       const carNumber = entry.carNumber;
       const series = entry.seriesRace;
-      const reqWeight = requiredWeights[carNumber] || 0;
+      const weightData = (requiredWeights[carNumber] as any) || { bop: 0, successBallast: 0, total: 0 };
       const log = weighInLogs[carNumber];
+      const insData = inspectionDataMap[carNumber];
       
       return {
         carNumber,
         series,
-        requiredWeight: reqWeight,
+        racerName: entry.nameEn || insData?.racerName,
+        engineSeal: insData?.engineSeal,
+        gearSeal: insData?.gearSeal,
+        requiredWeight: weightData.total,
+        bop: weightData.bop,
+        successBallast: weightData.successBallast,
         actualWeight: log ? log.actualWeight : '',
         status: log ? log.status : 'PENDING',
         recordedBy: log ? log.recordedBy : undefined
       };
     }).sort((a, b) => a.carNumber.localeCompare(b.carNumber, undefined, { numeric: true }));
-  }, [entries, searchCar, selectedSeries, requiredWeights, weighInLogs]);
+  }, [entries, searchCar, selectedSeries, requiredWeights, weighInLogs, inspectionDataMap]);
 
   // Handle Save
   const handleSaveResult = async (carNumber: string, series: string, requiredWeight: number, actualWeight: number | '', status: 'PASSED' | 'FAILED') => {
@@ -185,7 +247,16 @@ export default function WeighInTab() {
     };
 
     try {
-      await setDoc(docRef, payload, { merge: true });
+      await setDoc(docRef, {
+        ...payload,
+        history: arrayUnion({
+          status,
+          actualWeight: Number(actualWeight),
+          timestamp: new Date().toISOString(),
+          recordedBy: auth.currentUser.uid,
+          recordedByName: auth.currentUser.displayName || auth.currentUser.email || 'Official'
+        })
+      }, { merge: true });
       
       // Clear local input once saved successfully
       setLocalInputs(prev => ({...prev, [carNumber]: ''}));
@@ -292,19 +363,21 @@ export default function WeighInTab() {
       </div>
 
       {/* Main Table */}
-      <div className="bg-white rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto pb-10">
-          <table className="w-full text-left border-collapse min-w-[800px]">
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[900px] text-xs">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 font-bold text-xs text-slate-500 uppercase tracking-wider w-32">Car Number</th>
-                <th className="px-6 py-4 font-bold text-xs text-slate-500 uppercase tracking-wider">Series</th>
-                <th className="px-6 py-4 font-bold text-xs text-slate-500 uppercase tracking-wider w-40 text-center">Required (kg)</th>
-                <th className="px-6 py-4 font-bold text-xs text-slate-500 uppercase tracking-wider w-48 text-center">Actual (kg)</th>
-                <th className="px-6 py-4 font-bold text-xs text-slate-500 uppercase tracking-wider w-64 text-center">Action / Status</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                <th className="px-6 py-4 w-24"># Car</th>
+                <th className="px-6 py-4">Competitor / Category</th>
+                <th className="px-6 py-4 text-center">Equipment Seals</th>
+                <th className="px-6 py-4 text-center w-32">Req. (kg)</th>
+                <th className="px-6 py-4 text-center w-40">Actual (kg)</th>
+                <th className="px-6 py-4 text-center w-56">Validation</th>
+                <th className="px-6 py-4 text-center w-16">Log</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               <AnimatePresence>
                 {tableData.map((row) => {
                   const isSaved = row.status !== 'PENDING';
@@ -317,75 +390,98 @@ export default function WeighInTab() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isSaved ? (row.status === 'PASSED' ? 'bg-emerald-50/30' : 'bg-rose-50/30') : ''}`}
+                      className={`hover:bg-slate-50/50 transition-colors ${isSaved ? (row.status === 'PASSED' ? 'bg-emerald-50/10' : 'bg-rose-50/10') : ''}`}
                     >
                       <td className="px-6 py-4">
-                        <span className="text-3xl font-black text-slate-900 drop-shadow-sm">{row.carNumber}</span>
+                        <span className="text-xl font-black text-slate-900 leading-none">{row.carNumber}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-medium text-slate-600">{row.series}</span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="text-xl font-bold text-slate-400">
-                          {row.requiredWeight > 0 ? row.requiredWeight : '-'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center group">
-                        <div className="relative flex justify-center">
-                          <input 
-                            type="number" 
-                            className="w-28 text-center text-2xl font-bold bg-white border-2 border-slate-200 rounded-xl py-2 focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all shadow-inner"
-                            placeholder="---"
-                            value={inputValue}
-                            onChange={(e) => setLocalInputs(prev => ({...prev, [row.carNumber]: e.target.value === '' ? '' : Number(e.target.value)}))}
-                            disabled={userRole === 'competitor' || userRole === 'user'}
-                          />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-800 tracking-tight">{row.racerName || 'No Data'}</span>
+                          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">{row.series}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center justify-center gap-3">
-                          {userRole !== 'competitor' && userRole !== 'user' && (
+                        <div className="flex flex-col gap-0.5 items-center">
+                          <div className="flex gap-2">
+                             <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 uppercase tracking-tighter">ENG: {row.engineSeal || '-'}</span>
+                             <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 uppercase tracking-tighter">GR: {row.gearSeal || '-'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-sm font-mono font-bold text-slate-800">
+                            {row.requiredWeight > 0 ? row.requiredWeight.toFixed(1) : '-'}
+                          </span>
+                          {(row.requiredWeight > 0) && (
+                            <span className="text-[9px] text-slate-400 font-medium tracking-tighter">
+                              {row.bop.toFixed(0)} + {row.successBallast.toFixed(0)}SB
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <input 
+                          type="number" 
+                          className="w-24 text-center text-lg font-mono font-bold bg-slate-50 border-none rounded-lg py-2 focus:bg-white focus:ring-1 focus:ring-slate-300 outline-none transition-all text-slate-800"
+                          placeholder="00.0"
+                          value={inputValue}
+                          onChange={(e) => setLocalInputs(prev => ({...prev, [row.carNumber]: e.target.value === '' ? '' : Number(e.target.value)}))}
+                          disabled={userRole === 'competitor' || userRole === 'user'}
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          {(userRole !== 'competitor' && userRole !== 'user') ? (
                             <>
                               <button
                                 onClick={() => handleSaveResult(row.carNumber, row.series, row.requiredWeight, inputValue, 'PASSED')}
                                 disabled={inputValue === ''}
-                                className={`flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all focus:ring-4 focus:ring-emerald-100 ${
-                                  inputValue === '' ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                                  : isSaved && row.status === 'PASSED' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 border border-emerald-400 ring-2 ring-emerald-500 ring-offset-2'
-                                  : 'bg-white text-emerald-600 border-2 border-emerald-500 hover:bg-emerald-50'
+                                className={`flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                  inputValue === '' ? 'text-slate-300 cursor-not-allowed'
+                                  : isSaved && row.status === 'PASSED' ? 'bg-slate-900 text-white shadow'
+                                  : 'text-emerald-600 hover:bg-emerald-50 border border-emerald-100'
                                 }`}
                               >
-                                <CheckCircle2 className="w-5 h-5" />
-                                PASS
+                                {isSaved && row.status === 'PASSED' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                                Pass
                               </button>
                               <button
                                 onClick={() => handleSaveResult(row.carNumber, row.series, row.requiredWeight, inputValue, 'FAILED')}
                                 disabled={inputValue === ''}
-                                className={`flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all focus:ring-4 focus:ring-rose-100 ${
-                                  inputValue === '' ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
-                                  : isSaved && row.status === 'FAILED' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 border border-rose-400 ring-2 ring-rose-500 ring-offset-2'
-                                  : 'bg-white text-rose-600 border-2 border-rose-500 hover:bg-rose-50'
+                                className={`flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                  inputValue === '' ? 'text-slate-300 cursor-not-allowed' 
+                                  : isSaved && row.status === 'FAILED' ? 'bg-rose-500 text-white shadow'
+                                  : 'text-rose-600 hover:bg-rose-50 border border-rose-100'
                                 }`}
                               >
-                                <XCircle className="w-5 h-5" />
-                                FAIL
+                                {isSaved && row.status === 'FAILED' && <XCircle className="w-3.5 h-3.5" />}
+                                Fail
                               </button>
                             </>
-                          )}
-                          {(userRole === 'competitor' || userRole === 'user') && (
-                            <div className="flex-1 flex justify-center items-center">
+                          ) : (
+                            <div className="flex justify-center w-full">
                                {isSaved ? (
                                   row.status === 'PASSED' ? (
-                                      <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-xl"><CheckCircle2 className="w-4 h-4"/> PASSED</span>
+                                      <span className="text-[10px] font-bold px-3 py-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 uppercase tracking-widest flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3"/> PASSED</span>
                                   ) : (
-                                      <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-100 text-rose-700 font-bold rounded-xl"><XCircle className="w-4 h-4"/> FAILED</span>
+                                      <span className="text-[10px] font-bold px-3 py-1 bg-rose-50 text-rose-600 rounded border border-rose-100 uppercase tracking-widest flex items-center gap-1.5"><XCircle className="w-3 h-3"/> FAILED</span>
                                   )
                                ) : (
-                                  <span className="inline-flex items-center px-4 py-2 bg-slate-100 text-slate-500 font-bold rounded-xl">PENDING</span>
+                                  <span className="text-[10px] font-bold px-3 py-1 bg-slate-50 text-slate-400 rounded border border-slate-100 uppercase tracking-widest">PENDING</span>
                                )}
                             </div>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button 
+                          onClick={() => setLogModalCarNumber(row.carNumber)}
+                          className="p-2 text-slate-300 hover:text-slate-900 transition-colors"
+                        >
+                          <History className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </motion.tr>
                   );
@@ -393,8 +489,7 @@ export default function WeighInTab() {
 
                 {tableData.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-16 text-center text-slate-400 font-light text-lg">
-                      <Database className="w-12 h-12 mx-auto mb-4 text-slate-200" />
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-light text-sm">
                       No cars match the selected filters.
                     </td>
                   </tr>
@@ -404,6 +499,68 @@ export default function WeighInTab() {
           </table>
         </div>
       </div>
+
+      {/* History Modal */}
+      <AnimatePresence>
+        {logModalCarNumber && weighInLogs[logModalCarNumber] && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-[2px] p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="bg-white rounded-xl w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 uppercase tracking-tight">Technical Log</h2>
+                  <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-widest font-bold">
+                    Car #{logModalCarNumber} &bull; {selectedSession}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setLogModalCarNumber(null)}
+                  className="p-2 hover:bg-slate-50 rounded-full text-slate-400 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="overflow-y-auto flex-1 p-6 scrollbar-hide bg-slate-50/30">
+                {weighInLogs[logModalCarNumber].history && weighInLogs[logModalCarNumber].history!.length > 0 ? (
+                  <div className="space-y-3">
+                    {[...weighInLogs[logModalCarNumber].history!].reverse().map((log, idx) => (
+                      <div key={idx} className="flex items-start gap-4 p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
+                        <div className={`mt-0.5 w-6 h-6 rounded flex items-center justify-center shrink-0 ${log.status === 'PASSED' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                          {log.status === 'PASSED' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-sm font-bold text-slate-800">{log.actualWeight} KG</span>
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${log.status === 'PASSED' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {log.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400 font-medium uppercase">
+                            <span>{log.recordedByName}</span>
+                            <span>&bull;</span>
+                            <span>{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span>&bull;</span>
+                            <span>{new Date(log.timestamp).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-400 italic text-sm font-light">
+                    No history log recorded for this session.
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
