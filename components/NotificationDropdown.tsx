@@ -52,6 +52,8 @@ export function NotificationDropdown() {
         }
       });
       setNotifications(fetchedNotifications);
+    }, (error) => {
+      console.error('Error fetching notifications:', error);
     });
 
     return () => unsubscribe();

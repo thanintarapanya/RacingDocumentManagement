@@ -362,6 +362,8 @@ export default function InspectionTab() {
       } else {
         setTireBrands(['Yokohama', 'Hankook', 'Giti']); // Fallback
       }
+    }, (error) => {
+      console.error('Failed to fetch tire rules', error);
     });
     
     return () => {
@@ -440,6 +442,37 @@ export default function InspectionTab() {
       }
     }
   }, [formData.series, formData.carNumber, entries]);
+
+  // REAL-TIME CONCURRENCY SYNC
+  useEffect(() => {
+    if (!editingId || view !== 'form' || !auth.currentUser) return;
+
+    const docRef = doc(db, 'car_inspections', editingId);
+    const unsub = onSnapshot(docRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const serverFormData = data.formData || data;
+        
+        // Sync if someone else updated it
+        if (data.lastChangedBy && data.lastChangedBy !== auth.currentUser?.uid) {
+          setFormData(prev => {
+            // Only update if server has a newer timestamp
+            if (!prev.updatedAt || (data.updatedAt && data.updatedAt > prev.updatedAt)) {
+              // We merge but keep current user's cursor-stable fields if possible
+              // For simplicity, we merge all server fields, which is standard for collaborative forms
+              // that don't use more granular state.
+              return { ...prev, ...serverFormData, updatedAt: data.updatedAt };
+            }
+            return prev;
+          });
+        }
+      }
+    }, (error) => {
+      console.error("Concurrency sync error:", error);
+    });
+
+    return () => unsub();
+  }, [editingId, view]);
 
   const getChanges = (oldData: any, newData: any) => {
     const changes: Record<string, { old: any, new: any }> = {};
@@ -529,7 +562,7 @@ export default function InspectionTab() {
   };
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || userRole === null) return;
     
     let q;
     if (userRole === 'competitor' || userRole === 'user') {
@@ -563,6 +596,22 @@ export default function InspectionTab() {
         } else if (value === '3') {
           extraUpdates = { stadium: 'PT Songkhla Street Circuit' };
         }
+      }
+
+      // Handle sticker exclusivity
+      if (field === 'stickers.haveAllStickers' && value === true) {
+        return { 
+          ...prev, 
+          ...extraUpdates,
+          stickers: { ...prev.stickers, haveAllStickers: true, stillNeedSticker: false } 
+        };
+      }
+      if (field === 'stickers.stillNeedSticker' && value === true) {
+        return { 
+          ...prev, 
+          ...extraUpdates,
+          stickers: { ...prev.stickers, haveAllStickers: false, stillNeedSticker: true } 
+        };
       }
 
       const keys = field.split('.');
@@ -644,6 +693,8 @@ export default function InspectionTab() {
         notPassReasons: formData.notPassReasons || '',
         formData: { ...formData, status: finalStatus },
         updatedAt: new Date().toISOString(),
+        lastChangedBy: auth.currentUser.uid,
+        lastChangedByName: auth.currentUser.displayName || auth.currentUser.email || 'Official',
         userId: editingId ? (inspections.find(i => i.id === editingId)?.userId || auth.currentUser.uid) : auth.currentUser.uid
       };
 
@@ -671,6 +722,17 @@ export default function InspectionTab() {
       }
 
       await setDoc(docRef, payload, { merge: true });
+
+      // Handle sticker notification
+      if (formData.stickers?.stillNeedSticker && finalStatus !== 'Draft') {
+        createNotification({
+          targetRoles: ['admin', 'head_scrutineer', 'scrutineer_staff', 'secretary'],
+          title: 'Sticker Needed / ต้องการสติกเกอร์',
+          message: `Competitor Car #${formData.carNumber} (${formData.racerName}) still needs a sticker for ${formData.series}.`,
+          type: 'sticker_request',
+          link: 'inspection',
+        });
+      }
       
       createNotification({
         targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward', 'competitor'],

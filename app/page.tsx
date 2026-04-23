@@ -17,7 +17,8 @@ import {
   Search,
   Settings,
   Menu,
-  LogOut
+  LogOut,
+  Scale
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/store';
@@ -36,6 +37,7 @@ const DashboardTab = dynamic(() => import('@/components/tabs/DashboardTab'), { l
 const EntryFormTab = dynamic(() => import('@/components/tabs/EntryFormTab'), { loading: LoadingFallback });
 const ChecklistTab = dynamic(() => import('@/components/tabs/ChecklistTab'), { loading: LoadingFallback });
 const InspectionTab = dynamic(() => import('@/components/tabs/InspectionTab'), { loading: LoadingFallback });
+const WeighInTab = dynamic(() => import('@/components/tabs/WeighInTab'), { loading: LoadingFallback });
 const ReportTab = dynamic(() => import('@/components/tabs/ReportTab'), { loading: LoadingFallback });
 const RequestTab = dynamic(() => import('@/components/tabs/RequestTab'), { loading: LoadingFallback });
 const DeletedTab = dynamic(() => import('@/components/tabs/DeletedTab'), { loading: LoadingFallback });
@@ -46,6 +48,7 @@ const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, component: DashboardTab },
   { id: 'entry-form', label: 'Entry Form', icon: FileText, component: EntryFormTab },
   { id: 'checklist', label: 'Candidate Checklist', icon: CheckSquare, component: ChecklistTab },
+  { id: 'weigh-in', label: 'Weigh-in Station', icon: Scale, component: WeighInTab },
   { id: 'inspection', label: 'Inspection Form', icon: ClipboardList, component: InspectionTab },
   { id: 'report', label: 'Scrutineering Report', icon: FileCheck, component: ReportTab },
   { id: 'request', label: 'Competitor Request', icon: MessageSquare, component: RequestTab },
@@ -70,7 +73,7 @@ export default function Home() {
       case 'scrutineer_staff':
       case 'offsite_scrutineer':
       case 'steward':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request', 'settings'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'report', 'request', 'settings', 'weigh-in'].includes(t.id));
       case 'competitor':
       case 'user':
         return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'request', 'settings'].includes(t.id));

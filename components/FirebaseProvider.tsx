@@ -97,7 +97,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   const userRole = useAppStore((state) => state.userRole);
 
   useEffect(() => {
-    if (!isAuthReady || !auth.currentUser) return;
+    if (!isAuthReady || !auth.currentUser || userRole === null) return;
 
     let entriesQuery;
     let deletedItemsQuery;

@@ -226,6 +226,26 @@
         "updatedAt": { "type": "timestamp" }
       },
       "required": ["status", "userId", "createdAt", "updatedAt"]
+    },
+    "WeighInLog": {
+      "title": "WeighInLog",
+      "description": "Log of a car's weigh-in at a specific event and race",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "raceNumber": { "type": "string" },
+        "session": { "type": "string" },
+        "carNumber": { "type": "string" },
+        "series": { "type": "string" },
+        "requiredWeight": { "type": "number" },
+        "actualWeight": { "type": "number" },
+        "status": { "type": "string", "enum": ["PASSED", "FAILED", "PENDING"] },
+        "updatedAt": { "type": "string" },
+        "timestamp": { "type": "timestamp" },
+        "recordedBy": { "type": "string" },
+        "recordedByName": { "type": "string" }
+      },
+      "required": ["eventId", "raceNumber", "session", "carNumber", "series", "requiredWeight", "status", "updatedAt", "timestamp", "recordedBy", "recordedByName"]
     }
   },
   "firestore": {
@@ -272,6 +292,10 @@
     "/notifications/{notificationId}": {
       "schema": { "$ref": "#/entities/Notification" },
       "description": "Collection of user notifications"
+    },
+    "/weigh_in_logs/{logId}": {
+      "schema": { "$ref": "#/entities/WeighInLog" },
+      "description": "Collection of rapid weigh-in logs"
     }
   }
 }

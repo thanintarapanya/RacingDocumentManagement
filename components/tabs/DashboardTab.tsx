@@ -32,7 +32,7 @@ export default function DashboardTab() {
   const [inspections, setInspections] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || userRole === null) return;
 
     let requestsQuery;
     let inspectionsQuery;

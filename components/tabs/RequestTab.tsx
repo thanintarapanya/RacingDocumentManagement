@@ -214,7 +214,7 @@ export default function RequestTab() {
   }, [newRequest.series, newRequest.carNumber, entries]);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || userRole === null) return;
 
     let q;
     if (userRole === 'competitor' || userRole === 'user') {
