@@ -123,7 +123,7 @@ export default function WeighInTab() {
 
   // Derived required weights map
   const requiredWeights = useMemo(() => {
-    const weights: Record<string, number> = {};
+    const weights: Record<string, any> = {};
     inspections.forEach(ins => {
       if (ins.carNumber && ins.formData) {
         let bop = Number(ins.formData.baseWeight || 0);
@@ -177,9 +177,13 @@ export default function WeighInTab() {
   }, [inspections, racingResults, selectedRace, successBallastRules]);
 
   const inspectionDataMap = useMemo(() => {
+    const sortedInspections = [...inspections].sort((a, b) => 
+      new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime()
+    );
+
     const dataMap: Record<string, { racerName?: string, engineSeal?: string, gearSeal?: string }> = {};
-    inspections.forEach(ins => {
-      if (ins.carNumber) {
+    sortedInspections.forEach(ins => {
+      if (ins.carNumber && !dataMap[ins.carNumber]) {
         dataMap[ins.carNumber] = {
           racerName: ins.racerName || ins.formData?.racerName,
           engineSeal: ins.formData?.engineSealNumber,

@@ -151,6 +151,7 @@ export default function RequestTab() {
     licenseTeamManagerNo: '',
     nameRequestPermission: '',
     mobileNo: '',
+    userId: '',
     requestPermissionTopic: '',
     requestPermissionDetail: '',
     remark: '',
@@ -386,7 +387,7 @@ export default function RequestTab() {
     }
   };
 
-  const handleToggleApproval = async (type: 'chairman' | 'steward' | 'chief_inspection') => {
+  const handleToggleApproval = async (type: 'chairman' | 'steward' | 'chief_inspection' | 'clerk') => {
     if (!auth.currentUser || !editingId) return;
     setIsSubmitting(true);
     
@@ -661,6 +662,14 @@ export default function RequestTab() {
       chiefInspectionSignDate: req.chiefInspectionSignDate || '',
       secretarySignName: req.secretarySignName || '',
       secretarySignDate: req.secretarySignDate || '',
+      userId: req.userId || '',
+      gridPenalty: req.gridPenalty || 0,
+      requireClerkApproval: req.requireClerkApproval || false,
+      clerkStatus: req.clerkStatus || 'Pending',
+      clerkComment: req.clerkComment || '',
+      clerkSignName: req.clerkSignName || '',
+      clerkSignDate: req.clerkSignDate || '',
+      approvalLog: req.approvalLog || [],
       status: req.status || 'Pending'
     });
     setEditingId(req.id);
@@ -705,6 +714,14 @@ export default function RequestTab() {
       chiefInspectionSignDate: req.chiefInspectionSignDate || '',
       secretarySignName: req.secretarySignName || '',
       secretarySignDate: req.secretarySignDate || '',
+      userId: req.userId || '',
+      gridPenalty: req.gridPenalty || 0,
+      requireClerkApproval: req.requireClerkApproval || false,
+      clerkStatus: req.clerkStatus || 'Pending',
+      clerkComment: req.clerkComment || '',
+      clerkSignName: req.clerkSignName || '',
+      clerkSignDate: req.clerkSignDate || '',
+      approvalLog: req.approvalLog || [],
       status: req.status || 'Pending'
     });
     setEditingId(req.id);

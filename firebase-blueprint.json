@@ -262,6 +262,18 @@
         "recordedByName": { "type": "string" }
       },
       "required": ["eventId", "raceNumber", "session", "carNumber", "series", "requiredWeight", "status", "updatedAt", "timestamp", "recordedBy", "recordedByName"]
+    },
+    "RacingResult": {
+      "title": "RacingResult",
+      "description": "Placements for a specific race",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "series": { "type": "string" },
+        "raceNumber": { "type": "string" },
+        "results": { "type": "object", "description": "Map of carNumber -> rank" }
+      },
+      "required": ["eventId", "series", "raceNumber", "results"]
     }
   },
   "firestore": {
@@ -312,6 +324,10 @@
     "/weigh_in_logs/{logId}": {
       "schema": { "$ref": "#/entities/WeighInLog" },
       "description": "Collection of rapid weigh-in logs"
+    },
+    "/racing_results/{resultId}": {
+      "schema": { "$ref": "#/entities/RacingResult" },
+      "description": "Collection of race placements"
     }
   }
 }

@@ -62,7 +62,7 @@ interface Report {
 const initialFormData = {
   stadium: '',
   carNumber: '',
-  reportSession: '',
+  reportSession: 'Post-Race',
   race: '',
   series: '',
   grades: '',
@@ -148,18 +148,6 @@ export default function ReportTab() {
 
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (formData.series && formData.carNumber) {
-      const entry = entries.find(e => e.seriesRace === formData.series && e.carNumber === formData.carNumber);
-      if (entry && entry.formData) {
-        setFormData(prev => ({
-          ...prev,
-          grades: entry.formData.grade || entry.formData.grades || entry.formData.class || entry.gradeRace || '',
-        }));
-      }
-    }
-  }, [formData.series, formData.carNumber, entries]);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -366,6 +354,30 @@ export default function ReportTab() {
       ...prev,
       failedCars: [...prev.failedCars, { carNumber: '', reason: '' }]
     }));
+  };
+
+  const addAllCarsForSeries = () => {
+    if (!formData.series) {
+      alert('Please select a series first.');
+      return;
+    }
+    const seriesCars = entries
+      .filter(e => e.seriesRace === formData.series && e.carNumber)
+      .map(e => ({ carNumber: e.carNumber, remark: '' }));
+    
+    if (seriesCars.length === 0) {
+      alert('No entry found for this series.');
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      passedCars: [
+        ...prev.passedCars,
+        ...seriesCars.filter(sc => !prev.passedCars.some(pc => pc.carNumber === sc.carNumber))
+      ]
+    }));
+    showToast('Added all cars from entries');
   };
 
   const removeFailedCar = (index: number) => {
@@ -774,13 +786,12 @@ export default function ReportTab() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 gap-6">
                         {renderSelect('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
-                        {renderInput('Car Number / หมายเลขรถ', 'carNumber', 'text', 'Enter car number for auto-fill')}
                       </div>
                       {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
-                      {renderSelect('Report Session / รอบการแข่งขัน', 'reportSession', ['Qualify', 'Post-Qualify', 'Post-Race', 'Special Case'])}
-                      {renderInput('Race / เรซ', 'race')}
+                      {renderSelect('Report Session / รอบการแข่งขัน', 'reportSession', ['Post-Race', 'Special Case'])}
+                      {renderSelect('Race / เรซ', 'race', ['1', '2', '3', '4', '5', '6', '7'])}
                       {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3'])}
                       <div className="space-y-2">
                         <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Year / ปีการแข่งขัน</label>
@@ -790,11 +801,6 @@ export default function ReportTab() {
                           disabled
                           className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all opacity-60 cursor-not-allowed"
                         />
-                      </div>
-                    </div>
-                    <div className="space-y-6">
-                      <div className="space-y-6">
-                         {renderInput('Classes / คลาส (Auto-filled)', 'grades', 'text', 'Enter Class')}
                       </div>
                     </div>
                   </div>
@@ -814,28 +820,37 @@ export default function ReportTab() {
                   {/* Passed Cars Section */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-slate-700">The following cars have pass post-qualify scrutineering</h3>
+                      <h3 className="text-sm font-medium text-slate-700">The following cars have pass scrutineering</h3>
                       {!viewMode && canEdit && (
-                        <button 
-                          onClick={addPassedCar}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={addAllCarsForSeries}
+                            title="Add all cars from this series"
+                            className="h-8 px-3 flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors text-[10px] font-bold uppercase tracking-wider"
+                          >
+                            All Car Pass
+                          </button>
+                          <button 
+                            onClick={addPassedCar}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
                     
                     {formData.passedCars.length > 0 && (
-                      <div className="grid grid-cols-[1fr_2fr_auto] gap-4 mb-2 px-2">
+                      <div className="grid grid-cols-[1fr_2fr_48px] gap-4 mb-2 px-2">
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Car Number / หมายเลขรถ</div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remark / หมายเหตุ</div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium text-center w-10">Action</div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium text-center">Delete</div>
                       </div>
                     )}
                     
                     <div className="space-y-3">
                       {formData.passedCars.map((car, index) => (
-                        <div key={index} className="flex items-center gap-4">
+                        <div key={index} className="grid grid-cols-[1fr_2fr_48px] gap-4">
                           <input
                             type="text"
                             value={car.carNumber}
@@ -855,7 +870,7 @@ export default function ReportTab() {
                           {!viewMode && canEdit && (
                             <button 
                               onClick={() => removePassedCar(index)}
-                              className="w-12 h-[46px] shrink-0 flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
+                              className="w-full h-[46px] flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
                             >
                               <Minus className="w-4 h-4" />
                             </button>
@@ -873,7 +888,7 @@ export default function ReportTab() {
                   {/* Failed Cars Section */}
                   <div className="space-y-4 pt-6 border-t border-slate-100">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-slate-700">The following cars have not pass post-qualify scrutineering for the reason stated</h3>
+                      <h3 className="text-sm font-medium text-slate-700">The following cars have not pass scrutineering for the reason stated</h3>
                       {!viewMode && canEdit && (
                         <button 
                           onClick={addFailedCar}
@@ -885,16 +900,16 @@ export default function ReportTab() {
                     </div>
 
                     {formData.failedCars.length > 0 && (
-                      <div className="grid grid-cols-[1fr_2fr_auto] gap-4 mb-2 px-2">
+                      <div className="grid grid-cols-[1fr_2fr_48px] gap-4 mb-2 px-2">
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Car Number / หมายเลขรถ</div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Reason / เหตุผล</div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium text-center w-10">Action</div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium text-center">Delete</div>
                       </div>
                     )}
 
                     <div className="space-y-3">
                       {formData.failedCars.map((car, index) => (
-                        <div key={index} className="flex items-center gap-4">
+                        <div key={index} className="grid grid-cols-[1fr_2fr_48px] gap-4">
                           <input
                             type="text"
                             value={car.carNumber}
@@ -914,7 +929,7 @@ export default function ReportTab() {
                           {!viewMode && canEdit && (
                             <button 
                               onClick={() => removeFailedCar(index)}
-                              className="w-12 h-[46px] shrink-0 flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
+                              className="w-full h-[46px] flex items-center justify-center rounded-xl border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
                             >
                               <Minus className="w-4 h-4" />
                             </button>
