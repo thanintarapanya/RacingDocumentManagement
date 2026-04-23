@@ -268,7 +268,7 @@ export default function InspectionTab() {
     </AnimatePresence>
   );
 
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState<typeof initialFormData & { updatedAt?: string }>(initialFormData);
   const [showValidation, setShowValidation] = useState(false);
   const [showAddComponentModal, setShowAddComponentModal] = useState(false);
   const [newComponent, setNewComponent] = useState<Partial<ComponentItem>>({
