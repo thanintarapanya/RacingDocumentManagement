@@ -82,19 +82,39 @@ export default function DashboardTab() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'reports'));
     }
 
-    // Role Update logic for Tartib.thanintarapanya@gmail.com
+    // Role Update logic
     const handleRoleUpdate = async () => {
-      if (userRole === 'admin') {
-        const { getDocs, updateDoc, doc } = await import('firebase/firestore');
-        const q = query(collection(db, 'users'), where('email', '==', 'Tartib.thanintarapanya@gmail.com'));
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach(async (userDoc) => {
-          if (userDoc.data().role === 'offsite_scrutineer') {
-            await updateDoc(doc(db, 'users', userDoc.id), { role: 'competitor' });
-            console.log('Role updated for Tartib.thanintarapanya@gmail.com');
-          }
-        });
-      }
+      const { getDocs, updateDoc, doc } = await import('firebase/firestore');
+      
+      const email1 = 'tartib.thanintarapanya@gmail.com'; // Try lowercase
+      const q1 = query(collection(db, 'users'), where('email', '==', email1));
+      const qs1 = await getDocs(q1);
+      qs1.forEach(async (userDoc) => {
+        if (userDoc.data().role !== 'competitor') {
+          await updateDoc(doc(db, 'users', userDoc.id), { role: 'competitor' });
+          console.log('Role updated for ' + email1);
+        }
+      });
+      // Try capitalized just in case
+      const email1_alt = 'Tartib.thanintarapanya@gmail.com';
+      const q1_alt = query(collection(db, 'users'), where('email', '==', email1_alt));
+      const qs1_alt = await getDocs(q1_alt);
+      qs1_alt.forEach(async (userDoc) => {
+        if (userDoc.data().role !== 'competitor') {
+          await updateDoc(doc(db, 'users', userDoc.id), { role: 'competitor' });
+          console.log('Role updated for ' + email1_alt);
+        }
+      });
+
+      const email2 = 'info@embeddedlinuxgroup.com';
+      const q2 = query(collection(db, 'users'), where('email', '==', email2));
+      const qs2 = await getDocs(q2);
+      qs2.forEach(async (userDoc) => {
+        if (userDoc.data().role !== 'admin') {
+          await updateDoc(doc(db, 'users', userDoc.id), { role: 'admin' });
+          console.log('Role updated for ' + email2);
+        }
+      });
     };
     handleRoleUpdate();
 
