@@ -789,18 +789,22 @@ export default function ReportTab() {
                       <div className="grid grid-cols-1 gap-6">
                         {renderSelect('Series / รุ่นการแข่งขัน', 'series', SERIES_CATEGORIES)}
                       </div>
-                      {renderSelect('Stadium / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
-                      {renderSelect('Report Session / รอบการแข่งขัน', 'reportSession', ['Post-Race', 'Special Case'])}
-                      {renderSelect('Race / เรซ', 'race', ['1', '2', '3', '4', '5', '6', '7'])}
-                      {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3'])}
-                      <div className="space-y-2">
-                        <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Year / ปีการแข่งขัน</label>
-                        <input 
-                          type="text"
-                          value={formData.eventYear || ''}
-                          disabled
-                          className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all opacity-60 cursor-not-allowed"
-                        />
+                      <div className="grid grid-cols-2 gap-4">
+                        {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3', '4', '5'])}
+                        <div className="space-y-2">
+                          <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Year / ปีการแข่งขัน</label>
+                          <input 
+                            type="text"
+                            value={formData.eventYear || ''}
+                            disabled
+                            className="w-full bg-slate-50/50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-light text-slate-900 focus:outline-none focus:bg-white focus:border-orange-300 focus:ring-4 focus:ring-orange-100/50 transition-all opacity-60 cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+                      {renderSelect('Circuit / สนามแข่งขัน', 'stadium', ['Chang International Circuit', 'PT Songkhla Street Circuit', 'Bira Circuit', 'Bangsaen Street Circuit'])}
+                      <div className="grid grid-cols-2 gap-4">
+                        {renderSelect('Report Session / รอบแข่งขัน', 'reportSession', ['Post-Race', 'Special Case'])}
+                        {renderSelect('Race / เรซ', 'race', ['1', '2', '3', '4', '5', '6', '7'])}
                       </div>
                     </div>
                   </div>
