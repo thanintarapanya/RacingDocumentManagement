@@ -199,6 +199,9 @@ export default function WeighInTab() {
   // Combined data for table
   const tableData = useMemo(() => {
     let filtered = entries.filter(e => e.carNumber);
+    if (userRole === 'competitor' || userRole === 'user') {
+      filtered = filtered.filter(e => e.userId === auth.currentUser?.uid);
+    }
     if (selectedSeries !== 'All Series') {
       filtered = filtered.filter(e => e.seriesRace === selectedSeries);
     }

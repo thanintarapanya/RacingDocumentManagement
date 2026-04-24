@@ -322,7 +322,7 @@ export default function InspectionTab() {
   
   const canEdit = canEditAll || (canEditOwn && isOwnDoc);
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     if (currentStep === 1) {
       if (!formData.series || !formData.carNumber || !formData.grades) {
         setShowValidation(true);
@@ -337,6 +337,10 @@ export default function InspectionTab() {
         return;
       }
     }
+    
+    // Save current progress to Firestore as a draft for audit trail and cross-tab recovery
+    await handleSubmit('Draft', true);
+    
     setShowValidation(false);
     setCurrentStep(prev => prev + 1);
   };
@@ -668,16 +672,16 @@ export default function InspectionTab() {
     }
   };
 
-  const handleSubmit = async (statusOverride?: 'Draft' | 'Waiting For Inspection' | 'Inspecting' | 'Pass' | 'Not Pass') => {
+  const handleSubmit = async (statusOverride?: 'Draft' | 'Waiting For Inspection' | 'Inspecting' | 'Pass' | 'Not Pass', isAutoSave: boolean = false) => {
     if (!auth.currentUser) return;
 
-    if (!statusOverride || statusOverride !== 'Draft') {
+    if (!isAutoSave && (!statusOverride || statusOverride !== 'Draft')) {
       if (!confirm('Are you sure you want to submit? This form will be locked and cannot be changed after submitting.')) {
         return;
       }
     }
 
-    setIsSubmitting(true);
+    if (!isAutoSave) setIsSubmitting(true);
     try {
       const finalStatus = (typeof statusOverride === 'string' ? statusOverride : formData.status) || 'Draft';
       const docId = editingId || Date.now().toString();
@@ -718,42 +722,49 @@ export default function InspectionTab() {
               newData: payload,
               changes
             });
+          } else if (isAutoSave) {
+            // If it's an auto-save and no changes, we don't need to do anything
+            return;
           }
         }
       } else {
         Object.assign(payload, { createdAt: new Date().toISOString() });
+        // Set the editingId so the next auto-save or final save updates the same document
+        setEditingId(docId);
       }
 
       await setDoc(docRef, payload, { merge: true });
 
-      // Handle sticker notification
-      if (formData.stickers?.stillNeedSticker && finalStatus !== 'Draft') {
+      if (!isAutoSave) {
+        // Handle sticker notification
+        if (formData.stickers?.stillNeedSticker && finalStatus !== 'Draft') {
+          createNotification({
+            targetRoles: ['admin', 'head_scrutineer', 'scrutineer_staff', 'secretary'],
+            title: 'Sticker Needed / ต้องการสติกเกอร์',
+            message: `Competitor Car #${formData.carNumber} (${formData.racerName}) still needs a sticker for ${formData.series}.`,
+            type: 'sticker_request',
+            link: 'inspection',
+          });
+        }
+        
         createNotification({
-          targetRoles: ['admin', 'head_scrutineer', 'scrutineer_staff', 'secretary'],
-          title: 'Sticker Needed / ต้องการสติกเกอร์',
-          message: `Competitor Car #${formData.carNumber} (${formData.racerName}) still needs a sticker for ${formData.series}.`,
-          type: 'sticker_request',
+          targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward', 'competitor'],
+          title: editingId ? 'Inspection Updated' : 'New Inspection',
+          message: `${auth.currentUser.displayName || auth.currentUser.email} ${editingId ? 'updated' : 'started'} an inspection for car number ${formData.carNumber || '-'}.`,
+          type: 'inspection_update',
           link: 'inspection',
         });
+        
+        showToast(editingId ? 'Inspection updated successfully' : 'Inspection created successfully');
+        setView('list');
+        setEditingId(null);
+        setFormData(initialFormData);
+        setCurrentStep(1);
       }
-      
-      createNotification({
-        targetRoles: ['admin', 'president', 'secretary', 'head_scrutineer', 'scrutineer_staff', 'offsite_scrutineer', 'steward', 'competitor'],
-        title: editingId ? 'Inspection Updated' : 'New Inspection',
-        message: `${auth.currentUser.displayName || auth.currentUser.email} ${editingId ? 'updated' : 'started'} an inspection for car number ${formData.carNumber || '-'}.`,
-        type: 'inspection_update',
-        link: 'inspection',
-      });
-      
-      showToast(editingId ? 'Inspection updated successfully' : 'Inspection created successfully');
-      setView('list');
-      setEditingId(null);
-      setFormData(initialFormData);
-      setCurrentStep(1);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'car_inspections');
     } finally {
-      setIsSubmitting(false);
+      if (!isAutoSave) setIsSubmitting(false);
     }
   };
 
@@ -1973,8 +1984,8 @@ export default function InspectionTab() {
                 <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2">
                   Inspection Details
                 </h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-slate-500 font-light text-sm">View detailed inspection information.</p>
+                <div className="flex items-center gap-2 mt-1 text-slate-500 font-light text-sm">
+                  <span>View detailed inspection information.</span>
                   <span className="text-slate-300">•</span>
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${
                     selectedHistoryItem?.status === 'Pass' ? 'text-emerald-500' :
@@ -1985,6 +1996,12 @@ export default function InspectionTab() {
                   }`}>
                     {selectedHistoryItem?.status || 'Draft'}
                   </span>
+                  {editingId && (
+                    <>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-rose-500 font-bold uppercase tracking-tighter bg-rose-50 px-2 py-0.5 rounded ring-1 ring-rose-500/20">Active Edit</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -3013,7 +3030,11 @@ export default function InspectionTab() {
             <div className="flex gap-3">
               {currentStep > 1 ? (
                 <button 
-                  onClick={() => setCurrentStep(prev => prev - 1)}
+                  onClick={async () => {
+                    // Save current progress before going back
+                    await handleSubmit('Draft', true);
+                    setCurrentStep(prev => prev - 1);
+                  }}
                   className="px-8 py-3 rounded-full text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
                 >
                   Back

@@ -79,7 +79,7 @@ export default function Home() {
         return TABS.filter(t => ['dashboard', 'entry-form', 'checklist', 'inspection', 'racing-result', 'weigh-in', 'report', 'request', 'settings'].includes(t.id));
       case 'competitor':
       case 'user':
-        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'racing-result', 'request', 'settings'].includes(t.id));
+        return TABS.filter(t => ['dashboard', 'entry-form', 'inspection', 'racing-result', 'weigh-in', 'request', 'settings'].includes(t.id));
       default:
         return TABS.filter(t => ['dashboard', 'settings'].includes(t.id));
     }

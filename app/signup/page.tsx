@@ -293,20 +293,23 @@ function SignupContent() {
             )}
           </button>
 
-          <button 
-            type="button"
-            onClick={handleLineSignup}
-            disabled={isLoadingGoogle || isLoadingEmail || isLoadingLine || (inviteId !== null && inviteValid === false)}
-            className="w-full flex items-center justify-center gap-3 py-3.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed font-medium text-sm tracking-wide mt-3"
-          >
-            {isLoadingLine ? (
-              <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                {t[lang].signUpLine} <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
+          {/* LINE signup hidden as requested */}
+          {false && (
+            <button 
+              type="button"
+              onClick={handleLineSignup}
+              disabled={isLoadingGoogle || isLoadingEmail || isLoadingLine || (inviteId !== null && inviteValid === false)}
+              className="w-full flex items-center justify-center gap-3 py-3.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed font-medium text-sm tracking-wide mt-3"
+            >
+              {isLoadingLine ? (
+                <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  {t[lang].signUpLine} <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         <div className="mt-12 text-center space-y-4">

@@ -23,6 +23,7 @@ import {
 import AccountSettings from './settings/AccountSettings';
 import PrivacySettings from './settings/PrivacySettings';
 import RulesSettings from './settings/RulesSettings';
+import NotificationSettings from './settings/NotificationSettings';
 
 const ROLES = [
   'admin',
@@ -180,6 +181,17 @@ export default function SettingsTab() {
               <Lock className="w-5 h-5" />
               Privacy
             </button>
+            <button
+              onClick={() => setActiveSubTab('notifications')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                activeSubTab === 'notifications' 
+                  ? 'bg-orange-50 text-orange-600' 
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Mail className="w-5 h-5" />
+              Notifications
+            </button>
             {canManageUsers && (
               <>
                 <button
@@ -213,6 +225,7 @@ export default function SettingsTab() {
         <div className="flex-1 overflow-y-auto pb-12 pr-4 scrollbar-hide">
           {activeSubTab === 'account' && <AccountSettings />}
           {activeSubTab === 'privacy' && <PrivacySettings />}
+          {activeSubTab === 'notifications' && <NotificationSettings />}
           {activeSubTab === 'rules' && canManageUsers && <RulesSettings />}
           {activeSubTab === 'users' && canManageUsers && (
             <div className="space-y-8">

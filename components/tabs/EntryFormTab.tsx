@@ -160,7 +160,7 @@ export default function EntryFormTab() {
     grade: '',
     carNumber: '',
     stadium: '',
-    event: '',
+    event: [] as string[] | string,
     eventYear: new Date().getFullYear().toString(),
     // Step 2
     nameThai: '',
@@ -236,6 +236,21 @@ export default function EntryFormTab() {
     });
   };
 
+  const handleEventCheck = (eventValue: string) => {
+    setFormData(prev => {
+      const currentEvents = Array.isArray(prev.event) ? prev.event : (prev.event ? [prev.event] : []);
+      const newEvents = currentEvents.includes(eventValue) 
+        ? currentEvents.filter(e => e !== eventValue)
+        : [...currentEvents, eventValue].sort();
+      
+      // Auto-set stadium based on the newly formed array (if there's only one selection or based on priority)
+      // Actually the prompt says: "The stadium should also be mapped correctly per event during this loop... during loop". 
+      // It implies stadium will be correct at submit time per copy. We can just leave stadium alone or set it generically.
+      return { ...prev, event: newEvents };
+    });
+  };
+
+
   const handleBack = () => {
     if (currentStep > 1) setCurrentStep(prev => prev - 1);
   };
@@ -268,25 +283,48 @@ export default function EntryFormTab() {
         finalUploadedUrls[label] = fileUrls;
       }
 
-      const updatedFormData = {
-        ...formData,
-        uploadedFileUrls: finalUploadedUrls
-      };
-
-      const entryData = {
-        nameEn: [formData.nameEnglish, formData.surnameEnglish].filter(Boolean).join(' ') || '-',
-        nameTh: [formData.nameThai, formData.surnameThai].filter(Boolean).join(' ') || '-',
-        seriesRace: formData.series || '-',
-        gradeRace: formData.grade || '-',
-        carNumber: formData.carNumber || '-',
-        formData: updatedFormData,
-        status: (isDraftValue ? 'Draft' : 'Submitted') as 'Draft' | 'Submitted'
-      };
+      const eventsToProcess = Array.isArray(formData.event) && formData.event.length > 0 
+        ? formData.event 
+        : [formData.event as string || ''];
 
       if (editingId) {
+        // When editing an existing entry, we just update it.
+        const assignedStadium = eventsToProcess[0] === '3' 
+          ? 'PT Songkhla Street Circuit' 
+          : (eventsToProcess[0] === '1' || eventsToProcess[0] === '2' ? 'Chang International Circuit' : formData.stadium);
+          
+        const updatedFormData = { ...formData, event: eventsToProcess[0], stadium: assignedStadium, uploadedFileUrls: finalUploadedUrls };
+        const entryData = {
+          nameEn: [formData.nameEnglish, formData.surnameEnglish].filter(Boolean).join(' ') || '-',
+          nameTh: [formData.nameThai, formData.surnameThai].filter(Boolean).join(' ') || '-',
+          seriesRace: formData.series || '-',
+          gradeRace: formData.grade || '-',
+          carNumber: formData.carNumber || '-',
+          formData: updatedFormData,
+          status: (isDraftValue ? 'Draft' : 'Submitted') as 'Draft' | 'Submitted'
+        };
         await updateEntry(editingId, entryData);
       } else {
-        await addEntry(entryData);
+        // Multi-event creation loop
+        for (let i = 0; i < eventsToProcess.length; i++) {
+          const ev = eventsToProcess[i];
+          const assignedStadium = ev === '3' 
+            ? 'PT Songkhla Street Circuit' 
+            : (ev === '1' || ev === '2' ? 'Chang International Circuit' : formData.stadium);
+            
+          const updatedFormData = { ...formData, event: ev, stadium: assignedStadium, uploadedFileUrls: finalUploadedUrls };
+          const entryData = {
+            id: Number(entryId) + i,
+            nameEn: [formData.nameEnglish, formData.surnameEnglish].filter(Boolean).join(' ') || '-',
+            nameTh: [formData.nameThai, formData.surnameThai].filter(Boolean).join(' ') || '-',
+            seriesRace: formData.series || '-',
+            gradeRace: formData.grade || '-',
+            carNumber: formData.carNumber || '-',
+            formData: updatedFormData,
+            status: (isDraftValue ? 'Draft' : 'Submitted') as 'Draft' | 'Submitted'
+          };
+          await addEntry(entryData);
+        }
       }
       
       setIsSubmitting(false);
@@ -304,7 +342,7 @@ export default function EntryFormTab() {
           setEditingId(null);
           setUploadedFiles({});
           setFormData({
-            series: '', grade: '', carNumber: '', stadium: '', event: '', eventYear: new Date().getFullYear().toString(),
+            series: '', grade: '', carNumber: '', stadium: '', event: [] as string[] | string, eventYear: new Date().getFullYear().toString(),
             nameThai: '', surnameThai: '', nameEnglish: '', surnameEnglish: '', dob: '', bloodType: '', nationality: '', idCard: '', address: '', postcode: '', email: '', mobileNo: '', idLine: '', instagram: '', facebook: '', youtube: '', tiktok: '',
             competitionLicenseNo: '', categorizationGrade: '', issuedBy: '', dateOfIssued: '', expiryDate: '', carManufacturer: '', model: '', color: '', year: '', engineSize: '', engineCode: '', teamName: '', teamManagerName: '', managerMobileNo: '', requireTogetherForPitArea: '', addressForSendDocument: '', teamPostcode: '', teamMobileNo: '',
             consentingParty: '', signDate: '', digitalSignature: '',
@@ -444,7 +482,7 @@ export default function EntryFormTab() {
   const getMissingFields = (step: number) => {
     const missing = [];
     if (step === 1) {
-      if (!formData.event) missing.push('event');
+      if (!formData.event || formData.event.length === 0) missing.push('event');
       if (!formData.eventYear) missing.push('eventYear');
       if (!formData.series) missing.push('series');
       if (!formData.grade) missing.push('grade');
@@ -469,8 +507,10 @@ export default function EntryFormTab() {
 
   const isFieldInvalid = (field: string) => {
     if (!showValidation) return false;
-    const isMissing = (val: any) => val === undefined || val === null || val === '';
-    return isMissing(formData[field as keyof typeof formData]);
+    const val = formData[field as keyof typeof formData];
+    if (field === 'event') return Array.isArray(val) ? val.length === 0 : !val;
+    const isMissing = (v: any) => v === undefined || v === null || v === '';
+    return isMissing(val);
   };
 
   const renderInput = (label: string, field: keyof typeof formData, type = 'text', placeholder = '', className = '') => (
@@ -721,6 +761,7 @@ export default function EntryFormTab() {
                   <SortableHeader label="Series Race" sortKey="seriesRace" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="Class Race" sortKey="gradeRace" sortConfig={sortConfig} requestSort={requestSort} />
                   <SortableHeader label="Car Number" sortKey="carNumber" sortConfig={sortConfig} requestSort={requestSort} />
+                  <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-left">Event</th>
                   <th className="px-6 py-5 font-medium text-[10px] text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 text-right">Actions</th>
                 </tr>
               </thead>
@@ -761,6 +802,11 @@ export default function EntryFormTab() {
                       </td>
                       <td className="px-6 py-5">
                         <span className="text-sm text-slate-900 font-medium">{entry.carNumber}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm text-slate-600 font-medium whitespace-nowrap bg-slate-100 px-2 py-1 rounded-md">
+                          {entry.formData?.event ? `Event ${entry.formData.event}` : '-'}
+                        </span>
                       </td>
                       <td className="px-6 py-5 text-right">
                         <div className="flex items-center justify-end gap-4 transition-opacity">
@@ -1169,18 +1215,20 @@ export default function EntryFormTab() {
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       className="max-w-4xl mx-auto pb-12"
     >
-      <div className="mb-10 flex items-center gap-6">
-        <button 
-          onClick={() => setView('list')}
-          className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2">
-            {editingId ? 'Edit Entry Form' : 'Create Entry Form'}
-          </h1>
-          <p className="text-slate-500 font-light text-sm">Please fill in the required information below.</p>
+      <div className="mb-10 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={() => setView('list')}
+            className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 hover:text-orange-500 transition-colors text-slate-500"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-4xl font-light tracking-tight text-slate-900 mb-2">
+              {editingId ? 'Edit Entry Form' : 'Create Entry Form'}
+            </h1>
+            <p className="text-slate-500 font-light text-sm">Please fill in the required information below.</p>
+          </div>
         </div>
       </div>
 
@@ -1214,13 +1262,40 @@ export default function EntryFormTab() {
             >
               {currentStep === 1 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {renderSelect('Series Race / รุ่นการแข่งขัน', 'series', seriesOptions)}
-                  {renderSelect('Class Race / คลาส', 'grade', gradeOptions)}
-                  {renderInput('Car Number / หมายเลขรถ', 'carNumber', 'number')}
-                  {renderSelect('Stadium / สนามแข่งขัน', 'stadium', stadiumOptions)}
-                  {renderSelect('Event / งานแข่งขัน', 'event', ['1', '2', '3'])}
+                  {renderSelect('รุ่นการแข่งขัน / Series Race', 'series', seriesOptions)}
+                  {renderSelect('คลาส / Class Race', 'grade', gradeOptions)}
+                  {renderInput('หมายเลขรถ / Car Number', 'carNumber', 'number')}
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">งานแข่งขัน / Event <span className="text-orange-500 font-normal normal-case ml-2">(เลือก Event ที่สมัครแข่งขัน)</span></label>
+                    <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 p-2 -m-2 rounded-xl border border-transparent transition-all ${isFieldInvalid('event') ? 'border-red-400 bg-red-50/50 ring-4 ring-red-100/50' : ''}`}>
+                      {[
+                        { id: '1', label: 'Event 1', circuit: 'Chang International Circuit' },
+                        { id: '2', label: 'Event 2', circuit: 'Chang International Circuit' },
+                        { id: '3', label: 'Event 3', circuit: 'PT Songkhla Street Circuit' }
+                      ].map(ev => {
+                        const isChecked = Array.isArray(formData.event) ? formData.event.includes(ev.id) : formData.event === ev.id;
+                        return (
+                          <label key={ev.id} className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${isChecked ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white hover:border-orange-300'}`}>
+                            <div className="flex bg-white items-center h-5">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => handleEventCheck(ev.id)}
+                                disabled={!!editingId}
+                                className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500 mt-0.5"
+                              />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className={`text-sm font-medium ${isChecked ? 'text-orange-900' : 'text-slate-900'}`}>{ev.label}</span>
+                              <span className={`text-xs mt-0.5 ${isChecked ? 'text-orange-700' : 'text-slate-500'}`}>{ev.circuit}</span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Year / ปีการแข่งขัน</label>
+                    <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">ปีการแข่งขัน / Year</label>
                     <input 
                       type="text" 
                       value={formData.eventYear || ''}
@@ -1233,25 +1308,25 @@ export default function EntryFormTab() {
 
               {currentStep === 2 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {renderInput('Name (Thai) / ชื่อ (ภาษาไทย)', 'nameThai')}
-                  {renderInput('Surname (Thai) / นามสกุล (ภาษาไทย)', 'surnameThai')}
-                  {renderInput('Name (English) / ชื่อ (ภาษาอังกฤษ)', 'nameEnglish')}
-                  {renderInput('Surname (English) / นามสกุล (ภาษาอังกฤษ)', 'surnameEnglish')}
-                  {renderInput('Date of Birth / วันเดือนปีเกิด', 'dob', 'date')}
-                  {renderSelect('Blood Type / กรุ๊ปเลือด', 'bloodType', bloodTypes)}
-                  {renderInput('Nationality / สัญชาติ', 'nationality')}
-                  {renderInput('ID Card / Passport No. / หมายเลขบัตรประชาชน / พาสปอร์ต', 'idCard')}
+                  {renderInput('ชื่อ (ภาษาไทย) / Name (Thai)', 'nameThai')}
+                  {renderInput('นามสกุล (ภาษาไทย) / Surname (Thai)', 'surnameThai')}
+                  {renderInput('ชื่อ (ภาษาอังกฤษ) / Name (English)', 'nameEnglish')}
+                  {renderInput('นามสกุล (ภาษาอังกฤษ) / Surname (English)', 'surnameEnglish')}
+                  {renderInput('วัน/เดือน/ปีเกิด / Date of Birth', 'dob', 'date')}
+                  {renderSelect('กรุ๊ปเลือด / Blood Type', 'bloodType', bloodTypes)}
+                  {renderInput('สัญชาติ / Nationality', 'nationality')}
+                  {renderInput('เลขที่บัตรประชาชน / พาสปอร์ต / I.D.CARD NO. / PASSPORT NO.', 'idCard')}
                   <div className="md:col-span-2">
-                    {renderInput('Address / ที่อยู่', 'address')}
+                    {renderInput('ที่อยู่ปัจจุบัน / Address', 'address')}
                   </div>
-                  {renderInput('Postcode / รหัสไปรษณีย์', 'postcode')}
-                  {renderInput('Email / อีเมล', 'email', 'email')}
-                  {renderInput('Mobile No. / เบอร์โทรศัพท์', 'mobileNo', 'tel')}
-                  {renderInput('ID Line / ไอดีไลน์', 'idLine')}
-                  {renderInput('Instagram / อินสตาแกรม', 'instagram')}
-                  {renderInput('Facebook / เฟสบุ๊ค', 'facebook')}
-                  {renderInput('Youtube / ยูทูป', 'youtube')}
-                  {renderInput('Tiktok / ติ๊กต๊อก', 'tiktok')}
+                  {renderInput('รหัสไปรษณีย์ / Postcode', 'postcode')}
+                  {renderInput('อีเมล / Email', 'email', 'email')}
+                  {renderInput('เบอร์โทรศัพท์ / Mobile No.', 'mobileNo', 'tel')}
+                  {renderInput('ไอดีไลน์ / ID Line', 'idLine')}
+                  {renderInput('อินสตาแกรม / Instagram / IG', 'instagram')}
+                  {renderInput('เฟซบุ๊ก / Facebook', 'facebook')}
+                  {renderInput('ยูทูป / Youtube', 'youtube')}
+                  {renderInput('ติ๊กต๊อก / Tiktok', 'tiktok')}
                 </div>
               )}
 
@@ -1260,46 +1335,48 @@ export default function EntryFormTab() {
                   <div className="md:col-span-2 border-b border-slate-100 pb-4 mb-2">
                     <h2 className="text-lg font-light text-slate-900">Driver License</h2>
                   </div>
-                  {renderInput('Competition License No. / หมายเลขใบอนุญาตแข่งขัน', 'competitionLicenseNo')}
-                  {renderInput('Categorization Grade / เกรดนักแข่ง', 'categorizationGrade')}
-                  {renderInput('Issued By / ออกโดย', 'issuedBy')}
-                  {renderInput('Date of Issued / วันที่ออก', 'dateOfIssued', 'date')}
-                  {renderInput('Expiry Date / วันหมดอายุ', 'expiryDate', 'date')}
+                  {renderInput('เลขที่ใบอนุญาตขับแข่ง / Competition License No.', 'competitionLicenseNo')}
+                  {renderInput('ระดับตามใบอนุญาตขับแข่ง / Categorization Grade', 'categorizationGrade')}
+                  {renderInput('ออกโดย / Issued By', 'issuedBy')}
+                  {renderInput('วันออกใบอนุญาต / Date of Issued', 'dateOfIssued', 'date')}
+                  {renderInput('วันหมดอายุใบอนุญาต / Expiry Date', 'expiryDate', 'date')}
 
                   <div className="md:col-span-2 border-b border-slate-100 pb-4 mb-2 mt-4">
                     <h2 className="text-lg font-light text-slate-900">Car Info</h2>
                   </div>
-                  {renderInput('Car Manufacturer / ยี่ห้อรถ', 'carManufacturer')}
-                  {renderInput('Model / รุ่น', 'model')}
-                  {renderInput('Color / สี', 'color')}
-                  {renderInput('Year / ปี', 'year', 'number')}
-                  {renderInput('Engine Size (CC) / ขนาดเครื่องยนต์ (ซีซี)', 'engineSize', 'number')}
-                  {renderInput('Engine Code / รหัสเครื่องยนต์', 'engineCode')}
+                  {renderInput('ยี่ห้อรถ / Car Manufacturer', 'carManufacturer')}
+                  {renderInput('รุ่น / Model', 'model')}
+                  {renderInput('สี / Color', 'color')}
+                  {renderInput('ปี / Year', 'year', 'number')}
+                  {renderInput('ขนาดความจุเครื่องยนต์ / Engine Size (CC.)', 'engineSize', 'number')}
+                  {renderInput('รหัสเครื่องยนต์ / Engine Code', 'engineCode')}
 
                   <div className="md:col-span-2 border-b border-slate-100 pb-4 mb-2 mt-4">
                     <h2 className="text-lg font-light text-slate-900">Team Info</h2>
                   </div>
-                  {renderInput('Team Name / ชื่อทีม', 'teamName')}
-                  {renderInput('Team Manager Name / ชื่อผู้จัดการทีม', 'teamManagerName')}
-                  {renderInput('Manager Mobile No. / เบอร์โทรศัพท์ผู้จัดการทีม', 'managerMobileNo', 'tel')}
-                  {renderInput('Require together for pit area (Team Name) / ต้องการพิทติดกัน (ชื่อทีม)', 'requireTogetherForPitArea')}
+                  {renderInput('ชื่อทีมแข่ง / Team Name', 'teamName')}
+                  {renderInput('ชื่อ-สกุล ผู้จัดการทีม / Team Manager\'s Name', 'teamManagerName')}
+                  {renderInput('เบอร์โทรศัพท์มือถือผู้จัดการทีม / Manager Mobile No.', 'managerMobileNo', 'tel')}
+                  {renderInput('ความต้องการใช้พื้นที่ pit ร่วมกับทีมใด / Require together for pit area', 'requireTogetherForPitArea')}
                   <div className="md:col-span-2">
-                    {renderInput('Address for send document / ที่อยู่สำหรับจัดส่งเอกสาร', 'addressForSendDocument')}
+                    {renderInput('ที่อยู่ในการจัดส่งเอกสาร / Address for send document', 'addressForSendDocument')}
                   </div>
-                  {renderInput('Postcode / รหัสไปรษณีย์', 'teamPostcode')}
-                  {renderInput('Mobile No. / เบอร์โทรศัพท์', 'teamMobileNo', 'tel')}
+                  {renderInput('รหัสไปรษณีย์ / Postcode', 'teamPostcode')}
+                  {renderInput('เบอร์โทรศัพท์ / Mobile No.', 'teamMobileNo', 'tel')}
                 </div>
               )}
 
               {currentStep === 4 && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderFileUpload('1. Copy of ID Card / Passport / สำเนาบัตรประชาชน / พาสปอร์ต')}
-                    {renderFileUpload('2. Copy of Competition License / สำเนาใบอนุญาตขับขี่แข่งรถ')}
-                    {renderFileUpload('3. Medical Certificate / ใบรับรองแพทย์')}
-                    {renderFileUpload('4. Driver Photo (1 inch) / รูปถ่ายนักขับ (1 นิ้ว)')}
-                    {renderFileUpload('5. Car Photo (Front, Back, Left, Right) / รูปถ่ายรถ (หน้า, หลัง, ซ้าย, ขวา)')}
-                    {renderFileUpload('6. Other Document / เอกสารอื่นๆ')}
+                    {renderFileUpload('1. สำเนาบัตรประชาชน / พาสปอร์ต / Copy of ID.Card or Passport')}
+                    {renderFileUpload('2. สำเนาใบอนุญาตขับแข่ง / Copy of Driver\'s License')}
+                    {renderFileUpload('3. ใบรับรองแพทย์ / Medical Certificate')}
+                    {renderFileUpload('4. รูปถ่ายนักแข่ง (ขนาดไฟล์ไม่ต่ำกว่า 1MB) / Driver\'s Photo (File Size not less than 1 MB)')}
+                    {renderFileUpload('5. รูปถ่ายรถ (หน้า, หลัง, ซ้าย, ขวา) / Car Photo (Front, Back, Left, Right)')}
+                    {renderFileUpload('6. หลักฐานการชำระค่าสมัคร / Slip for payment')}
+                    {renderFileUpload('7. สำเนาสมุดบัญชี / A copy of book bank')}
+                    {renderFileUpload('8. เอกสารอื่นๆ / Other Document')}
                   </div>
                 </div>
               )}
@@ -1307,31 +1384,31 @@ export default function EntryFormTab() {
               {currentStep === 5 && (
                 <div className="space-y-8">
                   <div className="bg-slate-50/50 p-8 rounded-2xl border border-slate-100 text-sm font-light text-slate-600 space-y-6 h-72 overflow-y-auto leading-relaxed">
-                    <p>
-                      I hereby agree not to claim any damages resulting from accidents during the competition and agree to be fully responsible for any damages, on behalf of the organizer of the competition and all parties involved in organizing the event, including the venue owner, sponsors, donors of the event, and all officials, representatives, and agents of the aforementioned, in the event of legal proceedings, claims for compensation, expenses, or costs that may arise from the litigation or legal actions, as well as claims for damages related to death, injury, loss, or other damages to the person or property of the competitor. This applies regardless of whether the damages result from or are connected with the approval of the application or participation in this competition, and regardless of whether such damages occurred due to the actions or negligence of the aforementioned legal entities, employees, agents, representatives, or other parties.
-                    </p>
                     <p className="text-slate-500">
                       ข้าพเจ้าขอตกลงที่จะไม่เรียกร้องค่าเสียหายใดๆ อันเกิดจากอุบัติเหตุระหว่างการแข่งขัน และยินยอมรับผิดชอบต่อความเสียหายใดๆ แต่เพียงผู้เดียว ในนามของผู้จัดการแข่งขัน และทุกฝ่ายที่เกี่ยวข้องกับการจัดงาน รวมถึงเจ้าของสถานที่ ผู้สนับสนุน ผู้บริจาคของงาน และเจ้าหน้าที่ ตัวแทน ตลอดจนตัวแทนของบุคคลที่กล่าวถึงข้างต้นทั้งหมด ในกรณีที่มีการดำเนินคดีตามกฎหมาย การเรียกร้องค่าสินไหมทดแทน ค่าใช้จ่าย หรือต้นทุนที่อาจเกิดจากการฟ้องร้องหรือการกระทำทางกฎหมาย รวมถึงการเรียกร้องค่าเสียหายที่เกี่ยวข้องกับการเสียชีวิต การบาดเจ็บ การสูญเสีย หรือความเสียหายอื่นใดต่อบุคคลหรือทรัพย์สินของผู้เข้าแข่งขัน ทั้งนี้ ไม่ว่าความเสียหายนั้นจะเกิดจากหรือมีความเกี่ยวข้องกับการอนุมัติใบสมัครหรือการเข้าร่วมในการแข่งขันนี้ และไม่ว่าความเสียหายดังกล่าวจะเกิดขึ้นจากการกระทำหรือความประมาทเลินเล่อของนิติบุคคล พนักงาน ตัวแทน ผู้แทน หรือบุคคลอ้างอิงข้างต้นก็ตาม
                     </p>
                     <p>
-                      I consent to the company collecting, using, and/or disclosing my personal data, and I also consent to the collection of my personal data in the above-mentioned documents for the purpose of registering for the PT MAXNITRON RACING SERIES road racing competition, both for myself as a competitor and for the team. This consent is in accordance with the Personal Data Protection Act B.E. 2562 (2019) or other applicable laws and regulations. I also agree to allow the verification of the accuracy of the competition registration details.
+                      I hereby agree not to claim any damages resulting from accidents during the competition and agree to be fully responsible for any damages, on behalf of the organizer of the competition and all parties involved in organizing the event, including the venue owner, sponsors, donors of the event, and all officials, representatives, and agents of the aforementioned, in the event of legal proceedings, claims for compensation, expenses, or costs that may arise from the litigation or legal actions, as well as claims for damages related to death, injury, loss, or other damages to the person or property of the competitor. This applies regardless of whether the damages result from or are connected with the approval of the application or participation in this competition, and regardless of whether such damages occurred due to the actions or negligence of the aforementioned legal entities, employees, agents, representatives, or other parties.
                     </p>
                     <p className="text-slate-500">
                       ข้าพเจ้ายินยอมให้บริษัทเก็บรวบรวม ใช้ และ/หรือเปิดเผยข้อมูลส่วนบุคคลของข้าพเจ้า และยินยอมให้จัดเก็บข้อมูลส่วนบุคคลของข้าพเจ้าในเอกสารที่กล่าวถึงข้างต้นเพื่อวัตถุประสงค์ในการลงทะเบียนเข้าร่วมการแข่งขันรถยนต์ทางเรียบรายการ PT MAXNITRON RACING SERIES ทั้งในส่วนของข้าพเจ้าในฐานะผู้เข้าแข่งขันและสำหรับทีม การให้ความยินยอมนี้เป็นไปตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (2019) หรือกฎหมายและข้อบังคับอื่น ๆ ที่เกี่ยวข้อง ข้าพเจ้ายังตกลงที่จะอนุญาตให้มีการตรวจสอบความถูกต้องของรายละเอียดการลงทะเบียนการแข่งขันครั้งนี้ด้วย
                     </p>
-                    <p className="font-medium text-slate-900">
-                      I hereby sign to acknowledge and consent to the above-mentioned terms.
+                    <p>
+                      I consent to the company collecting, using, and/or disclosing my personal data, and I also consent to the collection of my personal data in the above-mentioned documents for the purpose of registering for the PT MAXNITRON RACING SERIES road racing competition, both for myself as a competitor and for the team. This consent is in accordance with the Personal Data Protection Act B.E. 2562 (2019) or other applicable laws and regulations. I also agree to allow the verification of the accuracy of the competition registration details.
                     </p>
                     <p className="font-medium text-slate-700">
                       ข้าพเจ้าลงลายมือชื่อไว้เพื่อเป็นการรับทราบและยินยอมตามข้อกำหนดที่กล่าวมาข้างต้น
                     </p>
+                    <p className="font-medium text-slate-900">
+                      I hereby sign to acknowledge and consent to the above-mentioned terms.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {renderInput('Consenting & Acknowledging Party / ผู้ยินยอมและรับทราบ', 'consentingParty')}
-                    {renderInput('Sign Date / วันที่เซ็น', 'signDate', 'date')}
+                    {renderInput('ผู้ให้คำยินยอมและรับทราบ / Consenting & Acknowledging Party', 'consentingParty')}
+                    {renderInput('วันที่เซ็น / Sign Date', 'signDate', 'date')}
                     <div className="md:col-span-2">
-                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium block mb-2">Digital Signature / ลายเซ็นดิจิทัล</label>
+                      <label className="text-[11px] uppercase tracking-wider text-slate-400 font-medium block mb-2">ลายเซ็นดิจิทัล / Digital Signature</label>
                       <div className="border border-slate-200 rounded-xl bg-white overflow-hidden p-2 relative">
                         <SignatureCanvas 
                           ref={signaturePadRef}

@@ -304,20 +304,23 @@ export default function LoginPage() {
                 )}
               </button>
 
-              <button 
-                type="button"
-                onClick={handleLineLogin}
-                disabled={isLoadingGoogle || isLoadingEmail || isLoadingLine}
-                className="w-full flex items-center justify-center gap-3 py-3.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed font-medium text-sm tracking-wide mt-3"
-              >
-                {isLoadingLine ? (
-                  <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <>
-                    {t[lang].signInLine} <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+              {/* LINE login hidden as requested */}
+              {false && (
+                <button 
+                  type="button"
+                  onClick={handleLineLogin}
+                  disabled={isLoadingGoogle || isLoadingEmail || isLoadingLine}
+                  className="w-full flex items-center justify-center gap-3 py-3.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed font-medium text-sm tracking-wide mt-3"
+                >
+                  {isLoadingLine ? (
+                    <div className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      {t[lang].signInLine} <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              )}
             </>
           )}
         </div>

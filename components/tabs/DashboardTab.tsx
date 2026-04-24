@@ -33,6 +33,8 @@ export default function DashboardTab() {
   const [requests, setRequests] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [inspections, setInspections] = useState<any[]>([]);
+  const [racingResults, setRacingResults] = useState<any[]>([]);
+  const [successBallastRules, setSuccessBallastRules] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!auth.currentUser || userRole === null) return;
@@ -56,6 +58,23 @@ export default function DashboardTab() {
       setInspections(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'car_inspections'));
 
+    const unsubResults = onSnapshot(collection(db, 'racing_results'), (snapshot) => {
+      setRacingResults(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const fetchRules = async () => {
+      try {
+        const { getDoc, doc } = await import('firebase/firestore');
+        const docSnap = await getDoc(doc(db, 'settings', 'success_ballast_rules'));
+        if (docSnap.exists()) {
+          setSuccessBallastRules(docSnap.data().rules || {});
+        }
+      } catch (e) {
+        console.error("Error fetching rules:", e);
+      }
+    };
+    fetchRules();
+
     let unsubReports = () => {};
     if (userRole !== 'competitor' && userRole !== 'user') {
       unsubReports = onSnapshot(collection(db, 'reports'), (snapshot) => {
@@ -63,10 +82,27 @@ export default function DashboardTab() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'reports'));
     }
 
+    // Role Update logic for Tartib.thanintarapanya@gmail.com
+    const handleRoleUpdate = async () => {
+      if (userRole === 'admin') {
+        const { getDocs, updateDoc, doc } = await import('firebase/firestore');
+        const q = query(collection(db, 'users'), where('email', '==', 'Tartib.thanintarapanya@gmail.com'));
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach(async (userDoc) => {
+          if (userDoc.data().role === 'offsite_scrutineer') {
+            await updateDoc(doc(db, 'users', userDoc.id), { role: 'competitor' });
+            console.log('Role updated for Tartib.thanintarapanya@gmail.com');
+          }
+        });
+      }
+    };
+    handleRoleUpdate();
+
     return () => {
       unsubRequests();
       unsubReports();
       unsubInspections();
+      unsubResults();
     };
   }, [userRole]);
 
@@ -167,6 +203,57 @@ export default function DashboardTab() {
 
   const isCompetitor = userRole === 'competitor' || userRole === 'user';
 
+  const competitorWeightData = useMemo(() => {
+    if (!isCompetitor || inspections.length === 0) return null;
+    
+    // We assume the competitor has at least one inspection they are looking at
+    // Usually a competitor sees their own car's requirement
+    const ins = inspections[0]; // Current competitor's car inspection
+    if (!ins || !ins.formData) return null;
+
+    const calculateWeight = (raceNum: number) => {
+      let bop = Number(ins.formData.baseWeight || 0);
+      ins.formData.dynamicWeights?.forEach((d: any) => {
+        if (d.isChecked) bop += Number(d.weight || 0);
+      });
+      if (ins.formData.customTablesData && ins.formData.customTablesSelections) {
+        ins.formData.customTablesData.forEach((table: any) => {
+          const selections = ins.formData.customTablesSelections[table.id];
+          if (selections) {
+            table.rows.forEach((row: any) => {
+              const isSelected = table.selectionType === 'single' ? selections === row.id : (Array.isArray(selections) && selections.includes(row.id));
+              if (isSelected) {
+                if (table.hasWeight) bop += Number(row.weight || 0);
+                if (table.hasCommitteeWeight) bop += Number(row.committeeWeight || 0);
+              }
+            });
+          }
+        });
+      }
+
+      let autoBallast = 0;
+      const rules = successBallastRules[ins.series] || { rank1: 30, rank2: 20, rank3: 10 };
+      racingResults.forEach(r => {
+        if (r.series === ins.series && Number(r.raceNumber) < raceNum) {
+          const rank = r.results?.[ins.carNumber];
+          if (rank === 1) autoBallast += rules.rank1;
+          else if (rank === 2) autoBallast += rules.rank2;
+          else if (rank === 3) autoBallast += rules.rank3;
+        }
+      });
+      return bop + autoBallast + Number(ins.formData.successBallast || 0);
+    };
+
+    // Current race is usually the one after the last recorded result or default to 1
+    const lastRaceNum = racingResults.reduce((max, r) => Math.max(max, Number(r.raceNumber)), 0);
+    const currentRace = lastRaceNum + 1;
+    
+    return {
+      current: calculateWeight(currentRace),
+      next: calculateWeight(currentRace + 1)
+    };
+  }, [isCompetitor, inspections, racingResults, successBallastRules]);
+
   const stats = isCompetitor ? [
     { title: 'My Entries', value: entries.length.toString(), icon: Users, trend: '+0%', positive: true },
     { title: 'My Total Inspections', value: inspections.length.toString(), icon: CheckCircle, trend: '+0%', positive: true },
@@ -187,9 +274,11 @@ export default function DashboardTab() {
           <h1 className="text-3xl font-light tracking-tight text-slate-900 mb-2">Dashboard</h1>
           <p className="text-slate-500 font-light text-sm">Overview of 24H Series - Dubai 2026</p>
         </div>
-        <button onClick={() => window.print()} className="px-4 py-2 bg-orange-500/20 text-orange-500 border border-orange-500/30 rounded-lg hover:bg-orange-500/30 transition-colors text-sm font-medium print:hidden">
-          Export Report
-        </button>
+        {!isCompetitor && (
+          <button onClick={() => window.print()} className="px-4 py-2 bg-orange-500/20 text-orange-500 border border-orange-500/30 rounded-lg hover:bg-orange-500/30 transition-colors text-sm font-medium print:hidden">
+            Export Report
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 print:grid-cols-4 gap-6">
@@ -216,68 +305,145 @@ export default function DashboardTab() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 print:grid-cols-3 gap-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, type: "spring", stiffness: 300, damping: 30 }}
-          className="glass-panel p-6 lg:col-span-2 print:col-span-2"
-        >
-          <h3 className="text-lg font-medium text-slate-900 mb-6">Entry Submissions</h3>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorEntries" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorApproved" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', backdropFilter: 'blur(8px)' }}
-                  itemStyle={{ color: '#0f172a' }}
-                />
-                <Area type="monotone" dataKey="entries" stroke="#f97316" fillOpacity={1} fill="url(#colorEntries)" />
-                <Area type="monotone" dataKey="approved" stroke="#10b981" fillOpacity={1} fill="url(#colorApproved)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+      {isCompetitor ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, type: "spring", stiffness: 300, damping: 30 }}
+            className="glass-panel p-6 lg:col-span-2"
+          >
+            <h3 className="text-lg font-medium text-slate-900 mb-6">Race Summary & Requirements</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Type</th>
+                    <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Details</th>
+                    <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Current Race Req.</th>
+                    <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Next Race Req.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {requests.filter(r => r.fineAmount > 0 || r.gridPenalty > 0 || r.penalty).length > 0 ? (
+                    requests.filter(r => r.fineAmount > 0 || r.gridPenalty > 0 || r.penalty).map(r => (
+                      <tr key={r.id}>
+                        <td className="py-4 font-medium text-slate-900 text-sm">Penalty / {r.requestPermissionTopic}</td>
+                        <td className="py-4 text-sm text-slate-600">
+                          <div className="space-y-1">
+                            {r.fineAmount > 0 && <p>Fine: {r.fineAmount.toLocaleString()} THB</p>}
+                            {r.gridPenalty > 0 && <p>Grid: {r.gridPenalty} Positions</p>}
+                            {r.penalty && <p>Reason: {r.penalty}</p>}
+                          </div>
+                        </td>
+                        <td className="py-4 text-center text-slate-900 font-bold">
+                          {competitorWeightData?.current ? `${competitorWeightData.current.toFixed(1)} kg` : '-'}
+                        </td>
+                        <td className="py-4 text-center text-slate-900 font-bold">
+                          {competitorWeightData?.next ? `${competitorWeightData.next.toFixed(1)} kg` : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-slate-400 text-sm italic">No active penalties or requirements found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, type: "spring", stiffness: 300, damping: 30 }}
-          className="glass-panel p-6"
-        >
-          <h3 className="text-lg font-medium text-slate-900 mb-6">Recent Activity</h3>
-          <div className="space-y-6">
-            {activities.map((activity, i) => (
-              <div key={i} className="flex items-start gap-4">
-                <div className={`w-2 h-2 mt-2 rounded-full flex-shrink-0 ${
-                  activity.type === 'entry' ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]' :
-                  activity.type === 'success' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)]' :
-                  activity.type === 'warning' ? 'bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.8)]' :
-                  'bg-indigo-500 shadow-[0_0_8px_rgba(129,140,248,0.8)]'
-                }`} />
-                <div>
-                  <p className="text-sm text-slate-800 font-light">{activity.text}</p>
-                  <p className="text-xs text-slate-500 mt-1">{activity.time}</p>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, type: "spring", stiffness: 300, damping: 30 }}
+            className="glass-panel p-6"
+          >
+            <h3 className="text-lg font-medium text-slate-900 mb-6">Recent Activity</h3>
+            <div className="space-y-6">
+              {activities.map((activity, i) => (
+                <div key={i} className="flex items-start gap-4">
+                  <div className={`w-2 h-2 mt-2 rounded-full flex-shrink-0 ${
+                    activity.type === 'entry' ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]' :
+                    activity.type === 'success' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)]' :
+                    activity.type === 'warning' ? 'bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.8)]' :
+                    'bg-indigo-500 shadow-[0_0_8px_rgba(129,140,248,0.8)]'
+                  }`} />
+                  <div>
+                    <p className="text-sm text-slate-800 font-light">{activity.text}</p>
+                    <p className="text-xs text-slate-500 mt-1">{activity.time}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      </div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 print:grid-cols-3 gap-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, type: "spring", stiffness: 300, damping: 30 }}
+            className="glass-panel p-6 lg:col-span-2 print:col-span-2"
+          >
+            <h3 className="text-lg font-medium text-slate-900 mb-6">Entry Submissions</h3>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorEntries" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorApproved" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', backdropFilter: 'blur(8px)' }}
+                    itemStyle={{ color: '#0f172a' }}
+                  />
+                  <Area type="monotone" dataKey="entries" stroke="#f97316" fillOpacity={1} fill="url(#colorEntries)" />
+                  <Area type="monotone" dataKey="approved" stroke="#10b981" fillOpacity={1} fill="url(#colorApproved)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
 
-      {isCompetitor && requests.some(r => r.fineAmount > 0 || r.gridPenalty > 0 || r.penalty) && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, type: "spring", stiffness: 300, damping: 30 }}
+            className="glass-panel p-6"
+          >
+            <h3 className="text-lg font-medium text-slate-900 mb-6">Recent Activity</h3>
+            <div className="space-y-6">
+              {activities.map((activity, i) => (
+                <div key={i} className="flex items-start gap-4">
+                  <div className={`w-2 h-2 mt-2 rounded-full flex-shrink-0 ${
+                    activity.type === 'entry' ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]' :
+                    activity.type === 'success' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)]' :
+                    activity.type === 'warning' ? 'bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.8)]' :
+                    'bg-indigo-500 shadow-[0_0_8px_rgba(129,140,248,0.8)]'
+                  }`} />
+                  <div>
+                    <p className="text-sm text-slate-800 font-light">{activity.text}</p>
+                    <p className="text-xs text-slate-500 mt-1">{activity.time}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Removed separate penalty section as it's now integrated or redundant for competitor */}
+      {!isCompetitor && requests.some(r => r.fineAmount > 0 || r.gridPenalty > 0 || r.penalty) && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

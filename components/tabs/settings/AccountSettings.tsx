@@ -5,6 +5,7 @@ import { auth, db } from '@/firebase';
 import { doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { updateProfile, deleteUser } from 'firebase/auth';
 import { handleFirestoreError, OperationType } from '@/lib/firebase-utils';
+import { useAppStore } from '@/lib/store';
 import { AlertTriangle, Save, Loader2 } from 'lucide-react';
 
 export default function AccountSettings() {
